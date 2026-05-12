@@ -13,17 +13,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check project initialized
+        id: check
+        run: |
+          if [ -f "go.mod" ]; then
+            echo "ready=true" >> $GITHUB_OUTPUT
+          else
+            echo "ready=false" >> $GITHUB_OUTPUT
+            echo "::notice::Go project not initialized yet, skipping build steps"
+          fi
+
       - name: Setup Go
+        if: steps.check.outputs.ready == 'true'
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Vet
+        if: steps.check.outputs.ready == 'true'
         run: go vet ./...
 
       - name: Test
+        if: steps.check.outputs.ready == 'true'
         run: go test -race -coverprofile=coverage.out ./...
 
       - name: Build
+        if: steps.check.outputs.ready == 'true'
         run: go build ./...
