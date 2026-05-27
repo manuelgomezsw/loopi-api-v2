@@ -2,6 +2,7 @@ package auth_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -76,6 +77,21 @@ func (m *mockRepo) ResetearIntentosLogin(usuarioID int) error {
 		return m.resetearFunc(usuarioID)
 	}
 	return nil
+}
+
+// --- Tests: NewHandlerWithMetrics ---
+
+func TestNewHandlerWithMetrics_NoDevuelveNil(t *testing.T) {
+	svc := &mockService{}
+	repo := &mockRepo{}
+	m, err := auth.NewMetrics()
+	if err != nil {
+		t.Fatalf("NewMetrics falló: %v", err)
+	}
+	h := auth.NewHandlerWithMetrics(svc, repo, m)
+	if h == nil {
+		t.Error("NewHandlerWithMetrics no debe devolver nil")
+	}
 }
 
 // --- Tests: Login ---
@@ -245,6 +261,100 @@ func TestLogout_CSRFValido_Devuelve204(t *testing.T) {
 
 	if rec.Code != http.StatusNoContent {
 		t.Errorf("esperado 204, obtenido %d", rec.Code)
+	}
+}
+
+func TestLogout_SinClaimsEnContexto_Devuelve401(t *testing.T) {
+	svc := &mockService{}
+	repo := &mockRepo{}
+	h := auth.NewHandler(svc, repo)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	req.Header.Set("X-XSRF-TOKEN", "token-csrf-123")
+	req.AddCookie(&http.Cookie{Name: "XSRF-TOKEN", Value: "token-csrf-123"})
+	// NO se inyectan claims en el contexto.
+	rec := httptest.NewRecorder()
+
+	h.Logout(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("esperado 401, obtenido %d", rec.Code)
+	}
+}
+
+func TestLogout_RevocarTokenFalla_Devuelve500(t *testing.T) {
+	svc := &mockService{
+		revocarTokenFunc: func(_ *auth.Claims) error {
+			return errors.New("BD no disponible")
+		},
+	}
+	repo := &mockRepo{}
+	h := auth.NewHandler(svc, repo)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	req.Header.Set("X-XSRF-TOKEN", "csrf-ok")
+	req.AddCookie(&http.Cookie{Name: "XSRF-TOKEN", Value: "csrf-ok"})
+	ctx := auth.ContextWithClaims(req.Context(), &auth.Claims{})
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	h.Logout(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("esperado 500, obtenido %d", rec.Code)
+	}
+}
+
+// --- Tests: LimpiarTokensRevocados ---
+
+func TestLimpiarTokensRevocados_SinHeaderCloudScheduler_Devuelve403(t *testing.T) {
+	h := auth.NewHandler(&mockService{}, &mockRepo{})
+
+	req := httptest.NewRequest(http.MethodPost, "/internal/jobs/limpiar_tokens_revocados", nil)
+	rec := httptest.NewRecorder()
+
+	h.LimpiarTokensRevocados(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("esperado 403, obtenido %d", rec.Code)
+	}
+}
+
+func TestLimpiarTokensRevocados_ConHeaderValido_Devuelve200(t *testing.T) {
+	h := auth.NewHandler(&mockService{}, &mockRepo{
+		limpiarFunc: func() (int64, error) { return 5, nil },
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/internal/jobs/limpiar_tokens_revocados", nil)
+	req.Header.Set("X-CloudScheduler", "true")
+	rec := httptest.NewRecorder()
+
+	h.LimpiarTokensRevocados(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("esperado 200, obtenido %d", rec.Code)
+	}
+
+	var resp map[string]interface{}
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["resultado"] != "ok" {
+		t.Errorf("resultado esperado 'ok', obtenido %q", resp["resultado"])
+	}
+}
+
+func TestLimpiarTokensRevocados_ErrorBD_Devuelve500(t *testing.T) {
+	h := auth.NewHandler(&mockService{}, &mockRepo{
+		limpiarFunc: func() (int64, error) { return 0, errors.New("BD no disponible") },
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/internal/jobs/limpiar_tokens_revocados", nil)
+	req.Header.Set("X-CloudScheduler", "true")
+	rec := httptest.NewRecorder()
+
+	h.LimpiarTokensRevocados(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("esperado 500, obtenido %d", rec.Code)
 	}
 }
 

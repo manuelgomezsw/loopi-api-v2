@@ -3,6 +3,7 @@ package auth
 import (
 	"database/sql"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -101,12 +102,14 @@ func (s *service) Authenticate(usuario, contrasena string) (*AuthResult, error) 
 }
 
 // RevocarToken inserta el jti en tokens_revocados para invalidar el JWT inmediatamente.
+//
+// Guarda la expiración original para que el job de limpieza pueda purgar tokens
+// revocados una vez que hayan expirado de forma natural.
 func (s *service) RevocarToken(claims *Claims) error {
-	exp, err := claims.GetExpirationTime()
-	if err != nil {
-		return err
+	if claims.RegisteredClaims.ExpiresAt == nil {
+		return errors.New("revocación: el token no contiene claim exp")
 	}
-	return s.repo.InsertTokenRevocado(claims.JTI, exp.Time)
+	return s.repo.InsertTokenRevocado(claims.JTI, claims.RegisteredClaims.ExpiresAt.Time)
 }
 
 // registrarFallo aplica la regla de negocio de bloqueo:
@@ -130,7 +133,7 @@ func (s *service) emitirToken(u *UsuarioAuth) (*AuthResult, error) {
 
 	claims := jwt.MapClaims{
 		"jti":       jti,
-		"sub":       u.ID,
+		"sub":       strconv.Itoa(u.ID), // sub debe ser string (RFC 7519 §4.1.2)
 		"rol":       u.Rol,
 		"tienda_id": u.TiendaID,
 		"iat":       now.Unix(),
