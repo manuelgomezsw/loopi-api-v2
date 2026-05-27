@@ -2,6 +2,10 @@ runtime: go124
 service: default
 
 # Conexión a Cloud SQL — prod
+# IMPORTANTE: la instancia loopi-db-prod NO existe aún (se crea antes del primer deploy a prod)
+# Comando: gcloud sql instances create loopi-db-prod --database-version=MYSQL_8_0
+#          --tier=db-n1-standard-1 --edition=ENTERPRISE --region=us-central1
+#          --availability-type=REGIONAL --project=loopi-prod-497600
 beta_settings:
   cloud_sql_instances: loopi-prod-497600:us-central1:loopi-db-prod
 
