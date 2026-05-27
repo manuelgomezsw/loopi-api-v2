@@ -8,6 +8,10 @@
 *.so
 *.dylib
 
+# Compiled binary output (sin extensión en Linux)
+/api
+/loopi-api-v2
+
 # Test binary, built with `go test -c`
 *.test
 
