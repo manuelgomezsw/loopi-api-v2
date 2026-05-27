@@ -29,9 +29,13 @@ func (m *mockService) RevocarToken(claims *auth.Claims) error {
 
 // mockRepo implementa auth.Repository para tests.
 type mockRepo struct {
-	insertFunc  func(jti string, expiraEn time.Time) error
-	existeFunc  func(jti string) (bool, error)
-	limpiarFunc func() (int64, error)
+	insertFunc                  func(jti string, expiraEn time.Time) error
+	existeFunc                  func(jti string) (bool, error)
+	limpiarFunc                 func() (int64, error)
+	buscarFunc                  func(nombre string) (*auth.UsuarioAuth, error)
+	incrementarIntentosFallidos func(usuarioID int, nuevoContador int) error
+	bloquearFunc                func(usuarioID int, hasta time.Time) error
+	resetearFunc                func(usuarioID int) error
 }
 
 func (m *mockRepo) InsertTokenRevocado(jti string, expiraEn time.Time) error {
@@ -44,6 +48,34 @@ func (m *mockRepo) ExisteTokenRevocado(jti string) (bool, error) {
 
 func (m *mockRepo) LimpiarTokensExpirados() (int64, error) {
 	return m.limpiarFunc()
+}
+
+func (m *mockRepo) BuscarUsuarioPorNombre(nombre string) (*auth.UsuarioAuth, error) {
+	if m.buscarFunc != nil {
+		return m.buscarFunc(nombre)
+	}
+	return nil, nil
+}
+
+func (m *mockRepo) IncrementarIntentosFallidos(usuarioID int, nuevoContador int) error {
+	if m.incrementarIntentosFallidos != nil {
+		return m.incrementarIntentosFallidos(usuarioID, nuevoContador)
+	}
+	return nil
+}
+
+func (m *mockRepo) BloquearUsuario(usuarioID int, hasta time.Time) error {
+	if m.bloquearFunc != nil {
+		return m.bloquearFunc(usuarioID, hasta)
+	}
+	return nil
+}
+
+func (m *mockRepo) ResetearIntentosLogin(usuarioID int) error {
+	if m.resetearFunc != nil {
+		return m.resetearFunc(usuarioID)
+	}
+	return nil
 }
 
 // --- Tests: Login ---

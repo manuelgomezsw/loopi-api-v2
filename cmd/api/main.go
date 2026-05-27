@@ -38,7 +38,7 @@ func main() {
 
 	// Repositorio, servicio y handler de autenticación.
 	authRepo := auth.NewRepository(db)
-	authSvc := auth.NewServiceWithDB(cfg, authRepo, db)
+	authSvc := auth.NewService(cfg, authRepo)
 	authHandler := auth.NewHandler(authSvc, authRepo)
 	jwtMiddleware := auth.JWTMiddleware(cfg.JWTSecret, authRepo)
 

@@ -12,22 +12,19 @@ import (
 	"github.com/manuelgomezsw/loopi-api-v2/config"
 )
 
-// dummyHash se usa para normalizar el tiempo de respuesta cuando el usuario no existe
-// (evita timing attack que revelaría si un usuario existe o no).
+// dummyHash normaliza el tiempo de respuesta cuando el usuario no existe,
+// evitando un timing attack que revelaría si un nombre de usuario es válido.
 var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("dummy-password-for-timing"), bcrypt.DefaultCost)
 
 // Errores exportados del dominio de autenticación.
 var (
-	// ErrCredencialesInvalidas se devuelve cuando el usuario/contraseña no coinciden,
-	// el usuario no existe, o la cuenta está inactiva.
 	ErrCredencialesInvalidas = errors.New("credenciales inválidas")
-
-	// ErrCuentaBloqueada se devuelve cuando bloqueado_hasta > NOW().
-	ErrCuentaBloqueada = errors.New("cuenta bloqueada")
+	ErrCuentaBloqueada       = errors.New("cuenta bloqueada")
 )
 
-// usuarioAuth agrupa los campos de `usuarios` relevantes para autenticación.
-type usuarioAuth struct {
+// UsuarioAuth agrupa los campos de `usuarios` relevantes para autenticación.
+// Exportado para que el repositorio y los tests puedan usarlo.
+type UsuarioAuth struct {
 	ID               int
 	ContrasenaHash   string
 	Rol              string
@@ -37,60 +34,50 @@ type usuarioAuth struct {
 	IntentosFallidos int
 }
 
-// AuthResult contiene los datos del login exitoso que el handler necesita para
-// construir las cookies y el body de respuesta.
+// AuthResult contiene los datos del login exitoso que el handler necesita.
 type AuthResult struct {
-	Token          string
-	JTI            string
-	ExpiresAt      time.Time
-	Rol            string
-	TiendaID       *int
+	Token     string
+	JTI       string
+	ExpiresAt time.Time
+	Rol       string
+	TiendaID  *int
 }
 
 // Service define las operaciones de negocio de autenticación.
 type Service interface {
-	// Authenticate valida credenciales y devuelve un AuthResult en caso de éxito.
 	Authenticate(usuario, contrasena string) (*AuthResult, error)
-
-	// RevocarToken inserta el jti en tokens_revocados y devuelve la duración del token
-	// para que el handler pueda expirar las cookies.
 	RevocarToken(claims *Claims) error
 }
 
 type service struct {
 	cfg  *config.Config
-	repo Repository
-	db   dbQuerier
+	repo Repository // única dependencia — cero SQL directo aquí
 }
 
-// dbQuerier abstrae las consultas a la tabla usuarios que necesita el servicio.
-// Permite testear sin una BD real.
-type dbQuerier interface {
-	QueryRow(query string, args ...interface{}) *sql.Row
-	Exec(query string, args ...interface{}) (sql.Result, error)
+// NewService crea el servicio de autenticación.
+// El service solo recibe el repositorio; no sabe que existe sql.DB.
+func NewService(cfg *config.Config, repo Repository) Service {
+	return &service{cfg: cfg, repo: repo}
 }
 
-// NewServiceWithDB crea el servicio de autenticación con acceso a la BD.
-func NewServiceWithDB(cfg *config.Config, repo Repository, db dbQuerier) Service {
-	return &service{cfg: cfg, repo: repo, db: db}
-}
-
-// Authenticate valida usuario y contraseña contra la tabla `usuarios`.
+// Authenticate valida credenciales y emite un JWT en caso de éxito.
 //
-// Flujo (RF-AUTH-01):
-//  1. Buscar usuario por nombre.
-//  2. Si no existe → bcrypt dummy + devolver ErrCredencialesInvalidas.
-//  3. Si no activo → bcrypt dummy + devolver ErrCredencialesInvalidas.
-//  4. Si bloqueado_hasta > NOW() → devolver ErrCuentaBloqueada.
-//  5. Comparar contraseña con bcrypt.
-//  6. Si incorrecto → incrementar intentos_fallidos; si llega a 5, bloquear 5 min.
-//  7. Si correcto → emitir JWT + resetear intentos.
+// Lógica de negocio (RF-AUTH-01) — sin ninguna sentencia SQL:
+//  1. Buscar usuario → repositorio
+//  2. Verificar activo
+//  3. Verificar bloqueo temporal
+//  4. Comparar contraseña con bcrypt
+//  5. En fallo → incrementar contador → repositorio
+//  6. En éxito → resetear contador → repositorio, emitir JWT
 func (s *service) Authenticate(usuario, contrasena string) (*AuthResult, error) {
-	u, err := s.buscarUsuario(usuario)
+	u, err := s.repo.BuscarUsuarioPorNombre(usuario)
 	if err != nil {
-		// Usuario no existe: ejecutar bcrypt dummy para normalizar tiempo.
-		_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(contrasena))
-		return nil, ErrCredencialesInvalidas
+		if errors.Is(err, sql.ErrNoRows) {
+			// Normalizar tiempo: hacer bcrypt aunque el usuario no exista.
+			_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(contrasena))
+			return nil, ErrCredencialesInvalidas
+		}
+		return nil, err
 	}
 
 	if !u.Activo {
@@ -98,27 +85,22 @@ func (s *service) Authenticate(usuario, contrasena string) (*AuthResult, error) 
 		return nil, ErrCredencialesInvalidas
 	}
 
-	now := time.Now().UTC()
-	if u.BloqueadoHasta != nil && u.BloqueadoHasta.After(now) {
+	if u.BloqueadoHasta != nil && u.BloqueadoHasta.After(time.Now().UTC()) {
 		return nil, ErrCuentaBloqueada
 	}
 
-	// Verificar contraseña.
 	if err := bcrypt.CompareHashAndPassword([]byte(u.ContrasenaHash), []byte(contrasena)); err != nil {
-		s.registrarFalloLogin(u)
+		s.registrarFallo(u) // lógica de negocio → delega escritura al repo
 		return nil, ErrCredencialesInvalidas
 	}
 
-	// Login exitoso: resetear contador.
-	_, _ = s.db.Exec(
-		`UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL WHERE id = ?`,
-		u.ID,
-	)
+	// Login exitoso: resetear contador (lógica de negocio → delega al repo).
+	_ = s.repo.ResetearIntentosLogin(u.ID)
 
 	return s.emitirToken(u)
 }
 
-// RevocarToken inserta el jti del JWT activo en tokens_revocados.
+// RevocarToken inserta el jti en tokens_revocados para invalidar el JWT inmediatamente.
 func (s *service) RevocarToken(claims *Claims) error {
 	exp, err := claims.GetExpirationTime()
 	if err != nil {
@@ -127,39 +109,21 @@ func (s *service) RevocarToken(claims *Claims) error {
 	return s.repo.InsertTokenRevocado(claims.JTI, exp.Time)
 }
 
-// buscarUsuario consulta la tabla usuarios por nombre de usuario.
-func (s *service) buscarUsuario(nombre string) (*usuarioAuth, error) {
-	u := &usuarioAuth{}
-	err := s.db.QueryRow(
-		`SELECT id, contrasena_hash, rol, tienda_id, activo, bloqueado_hasta, intentos_fallidos
-         FROM usuarios WHERE nombre = ?`,
-		nombre,
-	).Scan(&u.ID, &u.ContrasenaHash, &u.Rol, &u.TiendaID, &u.Activo, &u.BloqueadoHasta, &u.IntentosFallidos)
-	if err != nil {
-		return nil, err
-	}
-	return u, nil
-}
-
-// registrarFalloLogin incrementa intentos_fallidos; bloquea si llega a 5.
-func (s *service) registrarFalloLogin(u *usuarioAuth) {
-	u.IntentosFallidos++
-	if u.IntentosFallidos >= 5 {
-		bloqueadoHasta := time.Now().UTC().Add(5 * time.Minute)
-		_, _ = s.db.Exec(
-			`UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = ? WHERE id = ?`,
-			bloqueadoHasta, u.ID,
-		)
+// registrarFallo aplica la regla de negocio de bloqueo:
+// incrementa el contador; si llega a 5 bloquea la cuenta 5 minutos.
+// Toda escritura va al repositorio — aquí solo está la decisión.
+func (s *service) registrarFallo(u *UsuarioAuth) {
+	nuevoContador := u.IntentosFallidos + 1
+	if nuevoContador >= 5 {
+		hasta := time.Now().UTC().Add(5 * time.Minute)
+		_ = s.repo.BloquearUsuario(u.ID, hasta)
 	} else {
-		_, _ = s.db.Exec(
-			`UPDATE usuarios SET intentos_fallidos = ? WHERE id = ?`,
-			u.IntentosFallidos, u.ID,
-		)
+		_ = s.repo.IncrementarIntentosFallidos(u.ID, nuevoContador)
 	}
 }
 
-// emitirToken genera el JWT firmado con HS256 y los claims del usuario.
-func (s *service) emitirToken(u *usuarioAuth) (*AuthResult, error) {
+// emitirToken genera el JWT firmado HS256 — lógica pura, sin acceso a BD.
+func (s *service) emitirToken(u *UsuarioAuth) (*AuthResult, error) {
 	jti := uuid.New().String()
 	now := time.Now().UTC()
 	exp := now.Add(time.Duration(s.cfg.JWTExpiryHours) * time.Hour)
