@@ -1,0 +1,27 @@
+# Archivos ignorados en el deploy a App Engine
+.gcloudignore
+.git
+.gitignore
+README.md
+CLAUDE.md
+
+# CI/CD
+.github/
+
+# Tests y cobertura
+**/*_test.go
+*.test
+coverage.*
+*.coverprofile
+profile.cov
+
+# Configuración local
+.env
+*.local
+
+# Editor/IDE
+.idea/
+.vscode/
+
+# Archivo de prod (no subir al deploy de dev y viceversa)
+app.prod.yaml
