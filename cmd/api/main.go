@@ -1,32 +1,52 @@
 package main
 
 import (
-	"database/sql"
+	"context"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
+	otelsql "github.com/XSAM/otelsql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/rs/cors"
+	semconv "go.opentelemetry.io/otel/semconv/v1.27.0"
 
 	"github.com/manuelgomezsw/loopi-api-v2/config"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/auth"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/jobs"
+	"github.com/manuelgomezsw/loopi-api-v2/internal/observability"
 )
 
 func main() {
+	ctx := context.Background()
+
+	// Bootstrap OTel — no-op si OTEL_EXPORTER_OTLP_ENDPOINT está vacía.
+	otelShutdown, err := observability.Setup(ctx)
+	if err != nil {
+		log.Fatalf("error al inicializar observabilidad: %v", err)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = otelShutdown(shutdownCtx)
+	}()
+
 	// Cargar configuración desde variables de entorno.
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("error al cargar configuración: %v", err)
 	}
 
-	// Conectar a Cloud SQL (MySQL).
+	// Conectar a Cloud SQL (MySQL) con instrumentación automática de queries OTel.
 	dsn := os.Getenv("DB_DSN")
 	if dsn == "" {
 		log.Fatal("DB_DSN es obligatorio")
 	}
-	db, err := sql.Open("mysql", dsn)
+	db, err := otelsql.Open("mysql", dsn,
+		otelsql.WithAttributes(semconv.DBSystemMySQL),
+		otelsql.WithSpanOptions(otelsql.SpanOptions{Ping: false}),
+	)
 	if err != nil {
 		log.Fatalf("error al abrir conexión a BD: %v", err)
 	}
@@ -36,10 +56,16 @@ func main() {
 		log.Fatalf("error al conectar a BD: %v", err)
 	}
 
+	// Inicializar métricas OTel del dominio auth (MeterProvider global ya configurado).
+	m, err := auth.NewMetrics()
+	if err != nil {
+		log.Fatalf("error al inicializar métricas de auth: %v", err)
+	}
+
 	// Repositorio, servicio y handler de autenticación.
 	authRepo := auth.NewRepository(db)
 	authSvc := auth.NewService(cfg, authRepo)
-	authHandler := auth.NewHandler(authSvc, authRepo)
+	authHandler := auth.NewHandlerWithMetrics(authSvc, authRepo, m)
 	jwtMiddleware := auth.JWTMiddleware(cfg.JWTSecret, authRepo)
 
 	// Router principal.
