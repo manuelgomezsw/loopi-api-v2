@@ -3,11 +3,11 @@ service: default
 
 # Conexión a Cloud SQL — stage
 beta_settings:
-  cloud_sql_instances: loopi-stage-XXXXXX:us-central1:loopi-db-stage
+  cloud_sql_instances: loopi-dev-497600:us-central1:loopi-db-stage
 
 env_variables:
   ENV: stage
-  GCP_PROJECT: loopi-stage-XXXXXX
+  GCP_PROJECT: loopi-dev-497600
   APP_VERSION: "1.0.0"
   OTEL_SERVICE_NAME: "loopi-api"
   OTEL_EXPORTER_OTLP_ENDPOINT: "https://dd-agent-HASH-uc.a.run.app"
