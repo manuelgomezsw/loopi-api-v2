@@ -16,6 +16,7 @@ import (
 	"github.com/manuelgomezsw/loopi-api-v2/internal/auth"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/jobs"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/observability"
+	"github.com/manuelgomezsw/loopi-api-v2/internal/tiendas"
 )
 
 func main() {
@@ -83,6 +84,16 @@ func main() {
 	// Los claims validados quedan en el contexto del request para RBAC (RF-AUTH-05.2).
 	mux.Handle("POST /api/v1/auth/logout", jwtMiddleware(http.HandlerFunc(authHandler.Logout)))
 	mux.Handle("GET /api/v1/auth/me", jwtMiddleware(http.HandlerFunc(authHandler.Me)))
+
+	// Módulo de tiendas.
+	tiendasMetrics, err := tiendas.NewMetrics()
+	if err != nil {
+		log.Fatalf("error al inicializar métricas de tiendas: %v", err)
+	}
+	tiendasRepo := tiendas.NewRepository(db)
+	tiendasSvc := tiendas.NewService(tiendasRepo)
+	tiendasHandler := tiendas.NewTiendaHandlerWithMetrics(tiendasSvc, tiendasMetrics)
+	tiendasHandler.RegisterRoutes(mux, jwtMiddleware)
 
 	// Job de limpieza — sin middleware JWT, con validación de header X-CloudScheduler.
 	mux.HandleFunc("POST /internal/jobs/limpiar_tokens_revocados",
