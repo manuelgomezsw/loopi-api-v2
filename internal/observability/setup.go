@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.27.0"
@@ -50,13 +51,17 @@ func Setup(ctx context.Context) (shutdown func(context.Context) error, err error
 
 	metricExp, err := otlpmetrichttp.New(ctx,
 		otlpmetrichttp.WithEndpointURL(endpoint),
+		// Datadog solo acepta temporalidad delta; OTel usa cumulative por defecto.
+		otlpmetrichttp.WithTemporalitySelector(func(_ metric.InstrumentKind) metricdata.Temporality {
+			return metricdata.DeltaTemporality
+		}),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("observability: metric exporter: %w", err)
 	}
 	mp := metric.NewMeterProvider(
 		metric.WithReader(
-			metric.NewPeriodicReader(metricExp, metric.WithInterval(15*time.Second)),
+			metric.NewPeriodicReader(skipEmptyExporter{metricExp}, metric.WithInterval(15*time.Second)),
 		),
 		metric.WithResource(res),
 	)
@@ -67,6 +72,16 @@ func Setup(ctx context.Context) (shutdown func(context.Context) error, err error
 		_ = mp.Shutdown(ctx)
 		return nil
 	}, nil
+}
+
+// skipEmptyExporter evita enviar payloads vacíos a Datadog, que los rechaza con 400.
+type skipEmptyExporter struct{ metric.Exporter }
+
+func (e skipEmptyExporter) Export(ctx context.Context, rm *metricdata.ResourceMetrics) error {
+	if rm == nil || len(rm.ScopeMetrics) == 0 {
+		return nil
+	}
+	return e.Exporter.Export(ctx, rm)
 }
 
 func serviceName() string {
