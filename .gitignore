@@ -28,9 +28,11 @@ profile.cov
 go.work
 go.work.sum
 
-# env file
+# env file y scripts locales no versionados
 .env
+local.sh
 
 # Editor/IDE
 # .idea/
 # .vscode/
+commands.sh
