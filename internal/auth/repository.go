@@ -19,19 +19,19 @@ type Repository interface {
 	// LimpiarTokensExpirados elimina registros cuyo expira_en < NOW().
 	LimpiarTokensExpirados() (int64, error)
 
-	// --- usuarios (columnas propietarias de 001-autenticacion) ---
+	// --- empleados (autenticación desde 003-gestion-empleados) ---
 
-	// BuscarUsuarioPorNombre recupera los campos de autenticación de un usuario.
+	// BuscarUsuarioPorNombre recupera los campos de autenticación desde `empleados`.
 	// Devuelve sql.ErrNoRows si no existe.
 	BuscarUsuarioPorNombre(nombre string) (*UsuarioAuth, error)
 
-	// IncrementarIntentosFallidos suma 1 al contador del usuario.
+	// IncrementarIntentosFallidos suma 1 al contador en `empleados`.
 	IncrementarIntentosFallidos(usuarioID int, nuevoContador int) error
 
-	// BloquearUsuario establece bloqueado_hasta y resetea intentos_fallidos a 0.
+	// BloquearUsuario establece bloqueado_hasta y resetea intentos_fallidos en `empleados`.
 	BloquearUsuario(usuarioID int, hasta time.Time) error
 
-	// ResetearIntentosLogin limpia intentos_fallidos y bloqueado_hasta tras login exitoso.
+	// ResetearIntentosLogin limpia intentos_fallidos y bloqueado_hasta en `empleados`.
 	ResetearIntentosLogin(usuarioID int) error
 }
 
@@ -82,47 +82,61 @@ func (r *mysqlRepository) LimpiarTokensExpirados() (int64, error) {
 	return result.RowsAffected()
 }
 
-// --- usuarios ---
+// --- empleados (autenticación desde migración 003) ---
 
-// BuscarUsuarioPorNombre recupera los campos de autenticación del usuario.
+// BuscarUsuarioPorNombre recupera los campos de autenticación desde `empleados`.
+// Busca por el campo `usuario` (nombre único de login).
 func (r *mysqlRepository) BuscarUsuarioPorNombre(nombre string) (*UsuarioAuth, error) {
 	u := &UsuarioAuth{}
+	var tiendaID sql.NullInt64
+	var bloqueadoHasta sql.NullTime
+	var activo, requiereCambio int
 	err := r.db.QueryRow(
-		`SELECT id, contrasena_hash, rol, tienda_id, activo, bloqueado_hasta, intentos_fallidos
-         FROM usuarios WHERE nombre = ?`,
+		`SELECT id, contrasena_hash, rol, tienda_id, activo, bloqueado_hasta,
+		        intentos_fallidos, requiere_cambio_contrasena
+		 FROM empleados WHERE usuario = ?`,
 		nombre,
 	).Scan(
-		&u.ID, &u.ContrasenaHash, &u.Rol, &u.TiendaID,
-		&u.Activo, &u.BloqueadoHasta, &u.IntentosFallidos,
+		&u.ID, &u.ContrasenaHash, &u.Rol, &tiendaID,
+		&activo, &bloqueadoHasta, &u.IntentosFallidos, &requiereCambio,
 	)
 	if err != nil {
 		return nil, err
 	}
+	u.Activo = activo == 1
+	u.RequiereCambioContrasena = requiereCambio == 1
+	if tiendaID.Valid {
+		v := int(tiendaID.Int64)
+		u.TiendaID = &v
+	}
+	if bloqueadoHasta.Valid {
+		u.BloqueadoHasta = &bloqueadoHasta.Time
+	}
 	return u, nil
 }
 
-// IncrementarIntentosFallidos actualiza el contador de intentos del usuario.
+// IncrementarIntentosFallidos actualiza el contador de intentos en `empleados`.
 func (r *mysqlRepository) IncrementarIntentosFallidos(usuarioID int, nuevoContador int) error {
 	_, err := r.db.Exec(
-		`UPDATE usuarios SET intentos_fallidos = ? WHERE id = ?`,
+		`UPDATE empleados SET intentos_fallidos = ? WHERE id = ?`,
 		nuevoContador, usuarioID,
 	)
 	return err
 }
 
-// BloquearUsuario establece bloqueado_hasta y resetea intentos_fallidos a 0.
+// BloquearUsuario establece bloqueado_hasta y resetea intentos_fallidos en `empleados`.
 func (r *mysqlRepository) BloquearUsuario(usuarioID int, hasta time.Time) error {
 	_, err := r.db.Exec(
-		`UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = ? WHERE id = ?`,
+		`UPDATE empleados SET intentos_fallidos = 0, bloqueado_hasta = ? WHERE id = ?`,
 		hasta, usuarioID,
 	)
 	return err
 }
 
-// ResetearIntentosLogin limpia el contador y desbloquea al usuario tras login exitoso.
+// ResetearIntentosLogin limpia el contador y desbloquea al usuario en `empleados`.
 func (r *mysqlRepository) ResetearIntentosLogin(usuarioID int) error {
 	_, err := r.db.Exec(
-		`UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL WHERE id = ?`,
+		`UPDATE empleados SET intentos_fallidos = 0, bloqueado_hasta = NULL WHERE id = ?`,
 		usuarioID,
 	)
 	return err

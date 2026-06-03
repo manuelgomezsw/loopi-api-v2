@@ -23,16 +23,17 @@ var (
 	ErrCuentaBloqueada       = errors.New("cuenta bloqueada")
 )
 
-// UsuarioAuth agrupa los campos de `usuarios` relevantes para autenticación.
+// UsuarioAuth agrupa los campos de `empleados` relevantes para autenticación.
 // Exportado para que el repositorio y los tests puedan usarlo.
 type UsuarioAuth struct {
-	ID               int
-	ContrasenaHash   string
-	Rol              string
-	TiendaID         *int
-	Activo           bool
-	BloqueadoHasta   *time.Time
-	IntentosFallidos int
+	ID                       int
+	ContrasenaHash           string
+	Rol                      string
+	TiendaID                 *int
+	Activo                   bool
+	BloqueadoHasta           *time.Time
+	IntentosFallidos         int
+	RequiereCambioContrasena bool
 }
 
 // AuthResult contiene los datos del login exitoso que el handler necesita.
@@ -132,12 +133,13 @@ func (s *service) emitirToken(u *UsuarioAuth) (*AuthResult, error) {
 	exp := now.Add(time.Duration(s.cfg.JWTExpiryHours) * time.Hour)
 
 	claims := jwt.MapClaims{
-		"jti":       jti,
-		"sub":       strconv.Itoa(u.ID), // sub debe ser string (RFC 7519 §4.1.2)
-		"rol":       u.Rol,
-		"tienda_id": u.TiendaID,
-		"iat":       now.Unix(),
-		"exp":       exp.Unix(),
+		"jti":                        jti,
+		"sub":                        strconv.Itoa(u.ID), // sub debe ser string (RFC 7519 §4.1.2)
+		"rol":                        u.Rol,
+		"tienda_id":                  u.TiendaID,
+		"requiere_cambio_contrasena": u.RequiereCambioContrasena,
+		"iat":                        now.Unix(),
+		"exp":                        exp.Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

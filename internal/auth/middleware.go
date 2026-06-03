@@ -20,9 +20,10 @@ const (
 // Claims contiene los claims del JWT de loopi-api.
 type Claims struct {
 	jwt.RegisteredClaims
-	JTI      string `json:"jti"`
-	Rol      string `json:"rol"`
-	TiendaID *int   `json:"tienda_id"`
+	JTI                      string `json:"jti"`
+	Rol                      string `json:"rol"`
+	TiendaID                 *int   `json:"tienda_id"`
+	RequiereCambioContrasena bool   `json:"requiere_cambio_contrasena"`
 }
 
 // JWTMiddleware valida el token JWT en la cookie httpOnly en 3 pasos:
@@ -74,6 +75,13 @@ func JWTMiddleware(secret string, repo Repository) func(http.Handler) http.Handl
 				return
 			}
 
+			// Paso 4: bloquear si el empleado debe cambiar su contraseña (RF-EMP-04.6).
+			// El único endpoint permitido es POST .../contrasena/cambiar.
+			if claims.RequiereCambioContrasena && !esCambioContrasena(r) {
+				http.Error(w, `{"error":"cambio_contrasena_requerido","mensaje":"Debes cambiar tu contraseña antes de continuar."}`, http.StatusForbidden)
+				return
+			}
+
 			// Inyectar claims en el contexto para handlers posteriores (RBAC).
 			ctx := context.WithValue(r.Context(), ContextKeyClaims, claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -86,6 +94,20 @@ func JWTMiddleware(secret string, repo Repository) func(http.Handler) http.Handl
 func ClaimsFromContext(ctx context.Context) *Claims {
 	claims, _ := ctx.Value(ContextKeyClaims).(*Claims)
 	return claims
+}
+
+// esCambioContrasena reporta si el request es el endpoint de cambio de contraseña.
+// Este endpoint es el único permitido cuando requiere_cambio_contrasena = true (RF-EMP-04.6).
+func esCambioContrasena(r *http.Request) bool {
+	return r.Method == http.MethodPost && len(r.URL.Path) > 0 &&
+		hasPathSuffix(r.URL.Path, "/contrasena/cambiar")
+}
+
+func hasPathSuffix(path, suffix string) bool {
+	if len(path) < len(suffix) {
+		return false
+	}
+	return path[len(path)-len(suffix):] == suffix
 }
 
 // ContextWithClaims inyecta claims en un contexto.
