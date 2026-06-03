@@ -14,6 +14,7 @@ import (
 
 	"github.com/manuelgomezsw/loopi-api-v2/config"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/auth"
+	"github.com/manuelgomezsw/loopi-api-v2/internal/empleados"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/jobs"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/observability"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/tiendas"
@@ -94,6 +95,16 @@ func main() {
 	tiendasSvc := tiendas.NewService(tiendasRepo)
 	tiendasHandler := tiendas.NewTiendaHandlerWithMetrics(tiendasSvc, tiendasMetrics)
 	tiendasHandler.RegisterRoutes(mux, jwtMiddleware)
+
+	// Módulo de empleados.
+	empleadosMetrics, err := empleados.NewMetrics()
+	if err != nil {
+		log.Fatalf("error al inicializar métricas de empleados: %v", err)
+	}
+	empleadosRepo := empleados.NewRepository(db)
+	empleadosSvc := empleados.NewService(empleadosRepo)
+	empleadosHandler := empleados.NewHandlerWithMetrics(empleadosSvc, empleadosMetrics)
+	empleadosHandler.RegisterRoutes(mux, jwtMiddleware)
 
 	// Job de limpieza — sin middleware JWT, con validación de header X-CloudScheduler.
 	mux.HandleFunc("POST /internal/jobs/limpiar_tokens_revocados",

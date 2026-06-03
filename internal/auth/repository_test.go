@@ -147,10 +147,10 @@ func TestRepository_BuscarUsuarioPorNombre_Encontrado(t *testing.T) {
 
 	tiendaID := 5
 	rows := sqlmock.NewRows([]string{
-		"id", "contrasena_hash", "rol", "tienda_id", "activo", "bloqueado_hasta", "intentos_fallidos",
-	}).AddRow(42, "hash-bcrypt", "barista", tiendaID, true, nil, 0)
+		"id", "contrasena_hash", "rol", "tienda_id", "activo", "bloqueado_hasta", "intentos_fallidos", "requiere_cambio_contrasena",
+	}).AddRow(42, "hash-bcrypt", "barista", tiendaID, 1, nil, 0, 0)
 
-	mock.ExpectQuery(`SELECT id, contrasena_hash, rol, tienda_id, activo, bloqueado_hasta, intentos_fallidos`).
+	mock.ExpectQuery(`SELECT id, contrasena_hash, rol, tienda_id, activo, bloqueado_hasta,`).
 		WithArgs("juan").
 		WillReturnRows(rows)
 
@@ -167,13 +167,16 @@ func TestRepository_BuscarUsuarioPorNombre_Encontrado(t *testing.T) {
 	if u.TiendaID == nil || *u.TiendaID != 5 {
 		t.Error("tienda_id incorrecto")
 	}
+	if u.RequiereCambioContrasena {
+		t.Error("requiere_cambio_contrasena debe ser false")
+	}
 }
 
 func TestRepository_BuscarUsuarioPorNombre_NoExiste(t *testing.T) {
 	db, mock := newMockDB(t)
 	repo := auth.NewRepository(db)
 
-	mock.ExpectQuery(`SELECT id, contrasena_hash, rol, tienda_id, activo, bloqueado_hasta, intentos_fallidos`).
+	mock.ExpectQuery(`SELECT id, contrasena_hash, rol, tienda_id, activo, bloqueado_hasta,`).
 		WithArgs("fantasma").
 		WillReturnError(sql.ErrNoRows)
 
@@ -189,7 +192,7 @@ func TestRepository_IncrementarIntentosFallidos_Exitoso(t *testing.T) {
 	db, mock := newMockDB(t)
 	repo := auth.NewRepository(db)
 
-	mock.ExpectExec(`UPDATE usuarios SET intentos_fallidos`).
+	mock.ExpectExec(`UPDATE empleados SET intentos_fallidos`).
 		WithArgs(3, 99).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
@@ -202,7 +205,7 @@ func TestRepository_IncrementarIntentosFallidos_ErrorBD(t *testing.T) {
 	db, mock := newMockDB(t)
 	repo := auth.NewRepository(db)
 
-	mock.ExpectExec(`UPDATE usuarios SET intentos_fallidos`).
+	mock.ExpectExec(`UPDATE empleados SET intentos_fallidos`).
 		WillReturnError(errors.New("fallo"))
 
 	if err := repo.IncrementarIntentosFallidos(1, 1); err == nil {
@@ -217,7 +220,7 @@ func TestRepository_BloquearUsuario_Exitoso(t *testing.T) {
 	repo := auth.NewRepository(db)
 
 	hasta := time.Now().UTC().Add(5 * time.Minute)
-	mock.ExpectExec(`UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta`).
+	mock.ExpectExec(`UPDATE empleados SET intentos_fallidos = 0, bloqueado_hasta`).
 		WithArgs(sqlmock.AnyArg(), 7).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
@@ -230,7 +233,7 @@ func TestRepository_BloquearUsuario_ErrorBD(t *testing.T) {
 	db, mock := newMockDB(t)
 	repo := auth.NewRepository(db)
 
-	mock.ExpectExec(`UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta`).
+	mock.ExpectExec(`UPDATE empleados SET intentos_fallidos = 0, bloqueado_hasta`).
 		WillReturnError(errors.New("fallo"))
 
 	if err := repo.BloquearUsuario(1, time.Now().UTC()); err == nil {
@@ -244,7 +247,7 @@ func TestRepository_ResetearIntentosLogin_Exitoso(t *testing.T) {
 	db, mock := newMockDB(t)
 	repo := auth.NewRepository(db)
 
-	mock.ExpectExec(`UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL`).
+	mock.ExpectExec(`UPDATE empleados SET intentos_fallidos = 0, bloqueado_hasta = NULL`).
 		WithArgs(12).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
@@ -257,7 +260,7 @@ func TestRepository_ResetearIntentosLogin_ErrorBD(t *testing.T) {
 	db, mock := newMockDB(t)
 	repo := auth.NewRepository(db)
 
-	mock.ExpectExec(`UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL`).
+	mock.ExpectExec(`UPDATE empleados SET intentos_fallidos = 0, bloqueado_hasta = NULL`).
 		WillReturnError(errors.New("fallo"))
 
 	if err := repo.ResetearIntentosLogin(1); err == nil {
