@@ -3,7 +3,9 @@ package observability
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -20,6 +22,10 @@ import (
 // Si OTEL_EXPORTER_OTLP_ENDPOINT está vacía, opera en modo no-op sin errores.
 // El caller debe diferir la función shutdown retornada con un timeout de 5 s.
 func Setup(ctx context.Context) (shutdown func(context.Context) error, err error) {
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
+		log.Printf("[otel] error al exportar: %v", err)
+	}))
+
 	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 	if endpoint == "" {
 		return func(context.Context) error { return nil }, nil
@@ -36,8 +42,11 @@ func Setup(ctx context.Context) (shutdown func(context.Context) error, err error
 		return nil, fmt.Errorf("observability: resource: %w", err)
 	}
 
+	headers := otlpHeaders()
+
 	traceExp, err := otlptracehttp.New(ctx,
 		otlptracehttp.WithEndpointURL(endpoint),
+		otlptracehttp.WithHeaders(headers),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("observability: trace exporter: %w", err)
@@ -51,6 +60,7 @@ func Setup(ctx context.Context) (shutdown func(context.Context) error, err error
 
 	metricExp, err := otlpmetrichttp.New(ctx,
 		otlpmetrichttp.WithEndpointURL(endpoint),
+		otlpmetrichttp.WithHeaders(headers),
 		// Datadog solo acepta temporalidad delta; OTel usa cumulative por defecto.
 		otlpmetrichttp.WithTemporalitySelector(func(_ metric.InstrumentKind) metricdata.Temporality {
 			return metricdata.DeltaTemporality
@@ -82,6 +92,22 @@ func (e skipEmptyExporter) Export(ctx context.Context, rm *metricdata.ResourceMe
 		return nil
 	}
 	return e.Exporter.Export(ctx, rm)
+}
+
+// otlpHeaders parsea OTEL_EXPORTER_OTLP_HEADERS (formato: "k1=v1,k2=v2").
+func otlpHeaders() map[string]string {
+	raw := os.Getenv("OTEL_EXPORTER_OTLP_HEADERS")
+	if raw == "" {
+		return nil
+	}
+	headers := make(map[string]string)
+	for pair := range strings.SplitSeq(raw, ",") {
+		k, v, ok := strings.Cut(pair, "=")
+		if ok {
+			headers[strings.TrimSpace(k)] = strings.TrimSpace(v)
+		}
+	}
+	return headers
 }
 
 func serviceName() string {
