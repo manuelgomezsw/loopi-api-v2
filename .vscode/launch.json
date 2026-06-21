@@ -8,13 +8,7 @@
       "mode": "auto",
       "program": "${workspaceFolder}/cmd/api",
       "envFile": "${workspaceFolder}/.env",
-      "env": {
-        "ENV": "dev",
-        "PORT": "8080",
-        "APP_VERSION": "1.0.0",
-        "OTEL_SERVICE_NAME": "loopi-api",
-        "OTEL_EXPORTER_OTLP_ENDPOINT": ""
-      }
+      "preLaunchTask": "Matar proceso en :8080"
     },
     {
       "name": "Run API",
@@ -24,13 +18,7 @@
       "program": "${workspaceFolder}/cmd/api",
       "noDebug": true,
       "envFile": "${workspaceFolder}/.env",
-      "env": {
-        "ENV": "dev",
-        "PORT": "8080",
-        "APP_VERSION": "1.0.0",
-        "OTEL_SERVICE_NAME": "loopi-api",
-        "OTEL_EXPORTER_OTLP_ENDPOINT": ""
-      }
+      "preLaunchTask": "Matar proceso en :8080"
     }
   ]
 }
