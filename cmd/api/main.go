@@ -14,6 +14,7 @@ import (
 
 	"github.com/manuelgomezsw/loopi-api-v2/config"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/auth"
+	"github.com/manuelgomezsw/loopi-api-v2/internal/categorias"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/empleados"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/jobs"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/observability"
@@ -130,6 +131,20 @@ func main() {
 	umSvc := unidades_medida.NewService(umRepo)
 	umHandler := unidades_medida.NewHandlerWithMetrics(umSvc, umMetrics)
 	umHandler.RegisterRoutes(mux, jwtMiddleware)
+
+	// Módulo de categorías del catálogo.
+	catMetrics, err := categorias.NewMetrics()
+	if err != nil {
+		log.Fatalf("error al inicializar métricas de categorias: %v", err)
+	}
+	rawCatRepo := categorias.NewRepository(db)
+	catRepo, err := categorias.NewCachedRepository(rawCatRepo, cacheTTL)
+	if err != nil {
+		log.Fatalf("cache categorias: %v", err)
+	}
+	catSvc := categorias.NewService(catRepo)
+	catHandler := categorias.NewHandlerWithMetrics(catSvc, catMetrics)
+	catHandler.RegisterRoutes(mux, jwtMiddleware)
 
 	// Job de limpieza — sin middleware JWT, con validación de header X-CloudScheduler.
 	mux.HandleFunc("POST /internal/jobs/limpiar_tokens_revocados",
