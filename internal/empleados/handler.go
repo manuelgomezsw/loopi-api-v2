@@ -155,9 +155,16 @@ func (h *EmpleadoHandler) Listar(w http.ResponseWriter, r *http.Request) {
 			p.TiendaID = &v
 		}
 	}
-	if a := r.URL.Query().Get("activo"); a != "" {
-		v := a == "true"
-		p.Activo = &v
+	if estado := r.URL.Query().Get("estado"); estado != "" {
+		estadosValidos := map[string]bool{"activo": true, "inactivo": true, "todos": true}
+		if !estadosValidos[estado] {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "estado_invalido", Mensaje: "El estado debe ser 'activo', 'inactivo' o 'todos'.", Campo: "estado"})
+			return
+		}
+		if estado != "todos" {
+			v := estado == "activo"
+			p.Activo = &v
+		}
 	}
 
 	resp, err := h.svc.ListarEmpleados(ctx, p)

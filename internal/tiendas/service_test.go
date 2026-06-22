@@ -19,7 +19,7 @@ func TestService_Listar_EstadoInvalido_RetornaValidationError(t *testing.T) {
 	}
 	svc := tiendas.NewService(repo)
 
-	_, err := svc.Listar("invalido", 1, 50)
+	_, err := svc.Listar("xnvalido", 1, 50)
 	if err == nil {
 		t.Fatal("esperaba error por estado inválido")
 	}
@@ -43,7 +43,7 @@ func TestService_Listar_PaginaYLimiteDefaults_Normalizados(t *testing.T) {
 	}
 	svc := tiendas.NewService(repo)
 
-	_, err := svc.Listar("todas", 0, 200)
+	_, err := svc.Listar("todos", 0, 200)
 	if err != nil {
 		t.Fatalf("no esperaba error: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestService_Listar_OK_RetornaListaResponse(t *testing.T) {
 	}
 	svc := tiendas.NewService(repo)
 
-	resp, err := svc.Listar("activas", 1, 50)
+	resp, err := svc.Listar("activo", 1, 50)
 	if err != nil {
 		t.Fatalf("no esperaba error: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestService_Listar_ErrorRepo_Propaga(t *testing.T) {
 	}
 	svc := tiendas.NewService(repo)
 
-	_, err := svc.Listar("todas", 1, 50)
+	_, err := svc.Listar("todos", 1, 50)
 	if !errors.Is(err, errBD) {
 		t.Errorf("esperaba errBD, obtuvo: %v", err)
 	}

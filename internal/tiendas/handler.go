@@ -114,7 +114,7 @@ func (h *TiendaHandler) Listar(w http.ResponseWriter, r *http.Request) {
 
 	estado := r.URL.Query().Get("estado")
 	if estado == "" {
-		estado = "todas"
+		estado = "todos"
 	}
 	pagina := parseIntQuery(r, "pagina", 1)
 	limite := parseIntQuery(r, "limite", 50)

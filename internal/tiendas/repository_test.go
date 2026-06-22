@@ -201,7 +201,7 @@ func TestRepository_Listar_Activas_UsaFiltroActivo1(t *testing.T) {
 		WithArgs(50, 0).
 		WillReturnRows(tiendaRows())
 
-	lista, total, err := repo.Listar("activas", 1, 50)
+	lista, total, err := repo.Listar("activo", 1, 50)
 	if err != nil {
 		t.Fatalf("no esperaba error: %v", err)
 	}
@@ -224,7 +224,7 @@ func TestRepository_Listar_Inactivas_UsaFiltroActivo0(t *testing.T) {
 		WithArgs(50, 0).
 		WillReturnRows(tiendaRows())
 
-	_, _, err := repo.Listar("inactivas", 1, 50)
+	_, _, err := repo.Listar("inactivo", 1, 50)
 	if err != nil {
 		t.Fatalf("no esperaba error: %v", err)
 	}

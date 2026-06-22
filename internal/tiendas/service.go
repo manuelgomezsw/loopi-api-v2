@@ -42,11 +42,11 @@ func NewService(repo TiendaRepository) TiendaService {
 
 // Listar retorna tiendas paginadas. Valida estado, pagina y limite.
 func (s *tiendaService) Listar(estado string, pagina, limite int) (ListaTiendasResponse, error) {
-	estadosValidos := map[string]bool{"todas": true, "activas": true, "inactivas": true}
+	estadosValidos := map[string]bool{"todos": true, "activo": true, "inactivo": true}
 	if !estadosValidos[estado] {
 		return ListaTiendasResponse{}, &ValidationError{
 			Codigo:  "estado_invalido",
-			Mensaje: "El estado debe ser 'todas', 'activas' o 'inactivas'.",
+			Mensaje: "El estado debe ser 'activo', 'inactivo' o 'todos'.",
 			Campo:   "estado",
 		}
 	}
