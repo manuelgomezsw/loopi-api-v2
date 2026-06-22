@@ -18,6 +18,7 @@ import (
 	"github.com/manuelgomezsw/loopi-api-v2/internal/jobs"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/observability"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/tiendas"
+	"github.com/manuelgomezsw/loopi-api-v2/internal/unidades_medida"
 )
 
 func main() {
@@ -105,6 +106,19 @@ func main() {
 	empleadosSvc := empleados.NewService(empleadosRepo)
 	empleadosHandler := empleados.NewHandlerWithMetrics(empleadosSvc, empleadosMetrics)
 	empleadosHandler.RegisterRoutes(mux, jwtMiddleware)
+
+	// Módulo de unidades de medida.
+	umMetrics, err := unidades_medida.NewMetrics()
+	if err != nil {
+		log.Fatalf("error al inicializar métricas de unidades_medida: %v", err)
+	}
+	umRepo := unidades_medida.NewRepository(db)
+	umSvc, err := unidades_medida.NewService(umRepo)
+	if err != nil {
+		log.Fatalf("error al inicializar servicio de unidades_medida: %v", err)
+	}
+	umHandler := unidades_medida.NewHandlerWithMetrics(umSvc, umMetrics)
+	umHandler.RegisterRoutes(mux, jwtMiddleware)
 
 	// Job de limpieza — sin middleware JWT, con validación de header X-CloudScheduler.
 	mux.HandleFunc("POST /internal/jobs/limpiar_tokens_revocados",
