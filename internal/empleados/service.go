@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"errors"
+	"net/mail"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -79,6 +81,28 @@ func (s *empleadoService) CrearEmpleado(ctx context.Context, actorID uint64, req
 		}
 	}
 
+	// Validar formato de email si se proporciona.
+	if req.Email != nil && *req.Email != "" {
+		if _, parseErr := mail.ParseAddress(*req.Email); parseErr != nil {
+			return nil, &ValidationError{Codigo: "email_invalido", Mensaje: "El formato del email no es válido.", Campo: "email"}
+		}
+	}
+
+	// Validar edad mínima de 18 años si se proporciona fecha_nacimiento.
+	var fechaNac *time.Time
+	if req.FechaNacimiento != nil && *req.FechaNacimiento != "" {
+		t, parseErr := time.Parse("2006-01-02", *req.FechaNacimiento)
+		if parseErr != nil {
+			return nil, &ValidationError{Codigo: "fecha_nacimiento_invalida", Mensaje: "El formato de fecha de nacimiento no es válido. Use YYYY-MM-DD.", Campo: "fecha_nacimiento"}
+		}
+		hoy := time.Now()
+		limite := time.Date(hoy.Year()-18, hoy.Month(), hoy.Day(), 0, 0, 0, 0, time.UTC)
+		if t.After(limite) {
+			return nil, &ValidationError{Codigo: "edad_minima_requerida", Mensaje: "El empleado debe ser mayor de 18 años.", Campo: "fecha_nacimiento"}
+		}
+		fechaNac = &t
+	}
+
 	// Verificar unicidad del usuario.
 	existe, err := s.repo.ExistePorUsuario(ctx, req.Usuario)
 	if err != nil {
@@ -108,9 +132,7 @@ func (s *empleadoService) CrearEmpleado(ctx context.Context, actorID uint64, req
 		NumeroDocumento: req.NumeroDocumento,
 		Telefono:        req.Telefono,
 		Email:           req.Email,
-	}
-	if req.FechaNacimiento != nil {
-		// Se almacena como string "YYYY-MM-DD"; el repo lo pasa tal cual.
+		FechaNacimiento: fechaNac,
 	}
 
 	tx, err := s.repo.BeginTx(ctx)
@@ -189,7 +211,24 @@ func (s *empleadoService) EditarEmpleado(ctx context.Context, actorID, empleadoI
 		updated.Telefono = req.Telefono
 	}
 	if req.Email != nil {
+		if *req.Email != "" {
+			if _, parseErr := mail.ParseAddress(*req.Email); parseErr != nil {
+				return nil, &ValidationError{Codigo: "email_invalido", Mensaje: "El formato del email no es válido.", Campo: "email"}
+			}
+		}
 		updated.Email = req.Email
+	}
+	if req.FechaNacimiento != nil && *req.FechaNacimiento != "" {
+		t, parseErr := time.Parse("2006-01-02", *req.FechaNacimiento)
+		if parseErr != nil {
+			return nil, &ValidationError{Codigo: "fecha_nacimiento_invalida", Mensaje: "El formato de fecha de nacimiento no es válido. Use YYYY-MM-DD.", Campo: "fecha_nacimiento"}
+		}
+		hoy := time.Now()
+		limite := time.Date(hoy.Year()-18, hoy.Month(), hoy.Day(), 0, 0, 0, 0, time.UTC)
+		if t.After(limite) {
+			return nil, &ValidationError{Codigo: "edad_minima_requerida", Mensaje: "El empleado debe ser mayor de 18 años.", Campo: "fecha_nacimiento"}
+		}
+		updated.FechaNacimiento = &t
 	}
 
 	rolCambia := req.Rol != nil && *req.Rol != actual.Rol
