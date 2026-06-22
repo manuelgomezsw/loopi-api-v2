@@ -87,12 +87,18 @@ func main() {
 	mux.Handle("POST /api/v1/auth/logout", jwtMiddleware(http.HandlerFunc(authHandler.Logout)))
 	mux.Handle("GET /api/v1/auth/me", jwtMiddleware(http.HandlerFunc(authHandler.Me)))
 
+	const cacheTTL = 24 * time.Hour
+
 	// Módulo de tiendas.
 	tiendasMetrics, err := tiendas.NewMetrics()
 	if err != nil {
 		log.Fatalf("error al inicializar métricas de tiendas: %v", err)
 	}
-	tiendasRepo := tiendas.NewRepository(db)
+	rawTiendasRepo := tiendas.NewRepository(db)
+	tiendasRepo, err := tiendas.NewCachedRepository(rawTiendasRepo, cacheTTL)
+	if err != nil {
+		log.Fatalf("cache tiendas: %v", err)
+	}
 	tiendasSvc := tiendas.NewService(tiendasRepo)
 	tiendasHandler := tiendas.NewTiendaHandlerWithMetrics(tiendasSvc, tiendasMetrics)
 	tiendasHandler.RegisterRoutes(mux, jwtMiddleware)
@@ -102,7 +108,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("error al inicializar métricas de empleados: %v", err)
 	}
-	empleadosRepo := empleados.NewRepository(db)
+	rawEmpleadosRepo := empleados.NewRepository(db)
+	empleadosRepo, err := empleados.NewCachedRepository(rawEmpleadosRepo, cacheTTL)
+	if err != nil {
+		log.Fatalf("cache empleados: %v", err)
+	}
 	empleadosSvc := empleados.NewService(empleadosRepo)
 	empleadosHandler := empleados.NewHandlerWithMetrics(empleadosSvc, empleadosMetrics)
 	empleadosHandler.RegisterRoutes(mux, jwtMiddleware)
@@ -112,11 +122,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("error al inicializar métricas de unidades_medida: %v", err)
 	}
-	umRepo := unidades_medida.NewRepository(db)
-	umSvc, err := unidades_medida.NewService(umRepo)
+	rawUmRepo := unidades_medida.NewRepository(db)
+	umRepo, err := unidades_medida.NewCachedRepository(rawUmRepo, cacheTTL)
 	if err != nil {
-		log.Fatalf("error al inicializar servicio de unidades_medida: %v", err)
+		log.Fatalf("cache unidades_medida: %v", err)
 	}
+	umSvc := unidades_medida.NewService(umRepo)
 	umHandler := unidades_medida.NewHandlerWithMetrics(umSvc, umMetrics)
 	umHandler.RegisterRoutes(mux, jwtMiddleware)
 
