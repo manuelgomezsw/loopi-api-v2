@@ -7,11 +7,11 @@ import (
 )
 
 var (
-	ErrTipoInvalido          = errors.New("tipo_invalido")
-	ErrFactorInvalido        = errors.New("factor_invalido")
-	ErrYaInactiva            = errors.New("ya_inactiva")
+	ErrTipoInvalido            = errors.New("tipo_invalido")
+	ErrFactorInvalido          = errors.New("factor_invalido")
+	ErrYaInactiva              = errors.New("ya_inactiva")
 	ErrUnidadBaseNoInactivable = errors.New("unidad_base_no_inactivable")
-	ErrFactorBaseInmutable   = errors.New("factor_base_inmutable")
+	ErrFactorBaseInmutable     = errors.New("factor_base_inmutable")
 )
 
 // UMService define las operaciones de negocio del módulo de unidades de medida.
@@ -25,18 +25,12 @@ type UMService interface {
 }
 
 type umService struct {
-	repo  UMRepository
-	cache *umCache
+	repo UMRepository
 }
 
-// NewService crea un nuevo UMService.
-func NewService(repo UMRepository) (UMService, error) {
-	c, err := newUMCache()
-	if err != nil {
-		return nil, err
-	}
-	log.Printf(`{"level":"info","msg":"ristretto cache inicializado","modulo":"unidades_medida","ttl_segundos":300}`)
-	return &umService{repo: repo, cache: c}, nil
+// NewService crea un nuevo UMService. La caché se configura en el repositorio (decorador).
+func NewService(repo UMRepository) UMService {
+	return &umService{repo: repo}
 }
 
 var tiposValidos = map[string]bool{"peso": true, "volumen": true, "unidad": true}
@@ -60,7 +54,6 @@ func (s *umService) Crear(req *CrearUMRequest, userID uint64, rol string) (*Unid
 	if err != nil {
 		return nil, err
 	}
-	s.cache.invalidarCatalogo(u.ID)
 	log.Printf(`{"level":"info","user_id":%d,"rol":"%s","operacion":"crear_unidad","unidad_id":%d}`,
 		userID, rol, u.ID)
 	return u, nil
@@ -87,7 +80,6 @@ func (s *umService) Inactivar(id, userID uint64, rol string) (*InactivarResponse
 	if err := s.repo.Inactivar(id); err != nil {
 		return nil, err
 	}
-	s.cache.invalidarCatalogo(id)
 	log.Printf(`{"level":"info","user_id":%d,"rol":"%s","operacion":"inactivar_unidad","unidad_id":%d}`,
 		userID, rol, id)
 	return &InactivarResponse{ID: id, Activo: false, Mensaje: "Unidad inactivada correctamente."}, nil
@@ -114,43 +106,14 @@ func (s *umService) ObtenerImpacto(id uint64) (*ImpactoResponse, error) {
 	return resp, nil
 }
 
-// Listar retorna el catálogo paginado con caché.
+// Listar retorna el catálogo paginado. La caché opera en el repositorio.
 func (s *umService) Listar(params *ListarUMParams) (*ListarUMResponse, error) {
-	cacheKey := keyAll
-	if params.Tipo != "" {
-		cacheKey = fmt.Sprintf(keyByTipo, params.Tipo)
-	}
-	if params.Page == 1 && params.Activo == nil {
-		if val, ok := s.cache.get(cacheKey); ok {
-			if resp, ok := val.(*ListarUMResponse); ok {
-				return resp, nil
-			}
-		}
-	}
-	resp, err := s.repo.Listar(params)
-	if err != nil {
-		return nil, err
-	}
-	if params.Page == 1 && params.Activo == nil {
-		s.cache.set(cacheKey, resp)
-	}
-	return resp, nil
+	return s.repo.Listar(params)
 }
 
-// ObtenerPorID retorna detalle de una unidad con caché.
+// ObtenerPorID retorna el detalle de una unidad. La caché opera en el repositorio.
 func (s *umService) ObtenerPorID(id uint64) (*DetalleUMResponse, error) {
-	cacheKey := fmt.Sprintf(keyByID, id)
-	if val, ok := s.cache.get(cacheKey); ok {
-		if resp, ok := val.(*DetalleUMResponse); ok {
-			return resp, nil
-		}
-	}
-	resp, err := s.repo.ObtenerPorIDConItems(id)
-	if err != nil {
-		return nil, err
-	}
-	s.cache.set(cacheKey, resp)
-	return resp, nil
+	return s.repo.ObtenerPorIDConItems(id)
 }
 
 // Editar actualiza nombre y/o factor_conversion con validaciones de negocio.
@@ -171,7 +134,6 @@ func (s *umService) Editar(id uint64, req *EditarUMRequest, userID uint64, rol s
 	if err != nil {
 		return nil, err
 	}
-	s.cache.invalidarCatalogo(id)
 	log.Printf(`{"level":"info","user_id":%d,"rol":"%s","operacion":"editar_unidad","unidad_id":%d}`,
 		userID, rol, id)
 	return updated, nil
