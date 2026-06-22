@@ -227,6 +227,51 @@ func TestListarEmpleadosConFiltros(t *testing.T) {
 	}
 }
 
+// --- Tests de tipo_documento (RF-EMP-01.9) ---
+
+func TestCrearEmpleadoTipoDocumentoInvalido(t *testing.T) {
+	svc := newSvc(repoBase())
+	td := "TI"
+	req := empleados.CrearEmpleadoRequest{
+		Nombre:        "Ana",
+		Apellido:      "Gómez",
+		Usuario:       "ana.gomez.ti",
+		Rol:           "admin",
+		TipoDocumento: &td,
+	}
+	_, err := svc.CrearEmpleado(context.Background(), 1, req)
+	if err == nil {
+		t.Fatal("esperaba error tipo_documento_invalido, no lo hubo")
+	}
+	var valErr *empleados.ValidationError
+	if !errors.As(err, &valErr) || valErr.Codigo != "tipo_documento_invalido" {
+		t.Fatalf("error esperado tipo_documento_invalido, obtenido: %v", err)
+	}
+}
+
+func TestCrearEmpleadoTipoDocumentoValido(t *testing.T) {
+	validos := []string{"CC", "CE", "NUIP", "PE", ""}
+	for _, td := range validos {
+		td := td
+		t.Run(td, func(t *testing.T) {
+			svc := newSvc(repoBase())
+			req := empleados.CrearEmpleadoRequest{
+				Nombre:   "Ana",
+				Apellido: "Gómez",
+				Usuario:  "ana.gomez." + td,
+				Rol:      "admin",
+			}
+			if td != "" {
+				req.TipoDocumento = &td
+			}
+			_, err := svc.CrearEmpleado(context.Background(), 1, req)
+			if err != nil {
+				t.Fatalf("tipo_documento=%q no debería fallar, err: %v", td, err)
+			}
+		})
+	}
+}
+
 // --- Tests de generador de contraseña ---
 
 func TestGenerarContrasenaTempUnicidad(t *testing.T) {
