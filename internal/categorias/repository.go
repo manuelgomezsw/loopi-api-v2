@@ -88,9 +88,9 @@ func (r *mysqlRepository) ListarConItems(soloActivas *bool) (*CatalogoResponse, 
 	query := fmt.Sprintf(`
 		SELECT
 			c.id, c.nombre, c.activo, c.creado_por, c.creado_en, c.actualizado_por, c.actualizado_en,
-			COALESCE(s.id, 0), COALESCE(s.nombre, ''), COALESCE(s.categoria_id, 0),
-			COALESCE(s.activo, 0), COALESCE(s.creado_por, 0), COALESCE(s.creado_en, '1970-01-01'),
-			COALESCE(s.actualizado_por, 0), COALESCE(s.actualizado_en, '1970-01-01'),
+			s.id, s.nombre, s.categoria_id,
+			s.activo, s.creado_por, s.creado_en,
+			s.actualizado_por, s.actualizado_en,
 			COALESCE(item_count.total, 0)
 		FROM categorias c
 		LEFT JOIN subcategorias s ON s.categoria_id = c.id
@@ -132,9 +132,9 @@ func (r *mysqlRepository) listarSinItems(soloActivas *bool) (*CatalogoResponse, 
 	query := fmt.Sprintf(`
 		SELECT
 			c.id, c.nombre, c.activo, c.creado_por, c.creado_en, c.actualizado_por, c.actualizado_en,
-			COALESCE(s.id, 0), COALESCE(s.nombre, ''), COALESCE(s.categoria_id, 0),
-			COALESCE(s.activo, 0), COALESCE(s.creado_por, 0), COALESCE(s.creado_en, '1970-01-01'),
-			COALESCE(s.actualizado_por, 0), COALESCE(s.actualizado_en, '1970-01-01'),
+			s.id, s.nombre, s.categoria_id,
+			s.activo, s.creado_por, s.creado_en,
+			s.actualizado_por, s.actualizado_en,
 			0
 		FROM categorias c
 		LEFT JOIN subcategorias s ON s.categoria_id = c.id
@@ -158,14 +158,14 @@ func buildCatalogo(rows *sql.Rows) (*CatalogoResponse, error) {
 		var (
 			c          Categoria
 			activoInt  int
-			sID        uint64
-			sNombre    string
-			sCatID     uint64
-			sActivoInt int
-			sCreadoPor uint64
-			sCreadoEn  time.Time
-			sActPor    uint64
-			sActEn     time.Time
+			sID        sql.NullInt64
+			sNombre    sql.NullString
+			sCatID     sql.NullInt64
+			sActivoInt sql.NullInt64
+			sCreadoPor sql.NullInt64
+			sCreadoEn  sql.NullTime
+			sActPor    sql.NullInt64
+			sActEn     sql.NullTime
 			totalItems int
 		)
 		if err := rows.Scan(
@@ -183,17 +183,17 @@ func buildCatalogo(rows *sql.Rows) (*CatalogoResponse, error) {
 			catOrder = append(catOrder, c.ID)
 		}
 
-		if sID > 0 {
+		if sID.Valid {
 			sub := SubcategoriaResponse{
 				Subcategoria: Subcategoria{
-					ID:             sID,
-					Nombre:         sNombre,
-					CategoriaID:    sCatID,
-					Activo:         sActivoInt == 1,
-					CreadoPor:      sCreadoPor,
-					CreadoEn:       sCreadoEn,
-					ActualizadoPor: sActPor,
-					ActualizadoEn:  sActEn,
+					ID:             uint64(sID.Int64),
+					Nombre:         sNombre.String,
+					CategoriaID:    uint64(sCatID.Int64),
+					Activo:         sActivoInt.Int64 == 1,
+					CreadoPor:      uint64(sCreadoPor.Int64),
+					CreadoEn:       sCreadoEn.Time,
+					ActualizadoPor: uint64(sActPor.Int64),
+					ActualizadoEn:  sActEn.Time,
 				},
 				TotalItems: totalItems,
 			}
