@@ -10,11 +10,7 @@ import (
 // newSvc crea un UMService con el mock de repositorio dado.
 func newSvc(t *testing.T, repo um.UMRepository) um.UMService {
 	t.Helper()
-	svc, err := um.NewService(repo)
-	if err != nil {
-		t.Fatalf("no esperaba error al crear service: %v", err)
-	}
-	return svc
+	return um.NewService(repo)
 }
 
 // --- Crear ---
