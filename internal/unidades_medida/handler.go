@@ -166,9 +166,16 @@ func (h *UMHandler) Listar(w http.ResponseWriter, r *http.Request) {
 	if params.Limit > 200 {
 		params.Limit = 200
 	}
-	if activoStr := r.URL.Query().Get("activo"); activoStr != "" {
-		b := activoStr == "true"
-		params.Activo = &b
+	if estado := r.URL.Query().Get("estado"); estado != "" {
+		estadosValidos := map[string]bool{"activo": true, "inactivo": true, "todos": true}
+		if !estadosValidos[estado] {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "estado_invalido", Mensaje: "El estado debe ser 'activo', 'inactivo' o 'todos'.", Campo: "estado"})
+			return
+		}
+		if estado != "todos" {
+			b := estado == "activo"
+			params.Activo = &b
+		}
 	}
 
 	resp, err := h.svc.Listar(params)

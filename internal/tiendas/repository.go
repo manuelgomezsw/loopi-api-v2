@@ -80,15 +80,15 @@ func (r *mysqlTiendaRepository) ObtenerPorID(id uint64) (Tienda, error) {
 }
 
 // Listar retorna tiendas paginadas ordenadas por nombre ASC.
-// estado: "todas" | "activas" | "inactivas"
+// estado: "activo" | "inactivo" | "todos"
 func (r *mysqlTiendaRepository) Listar(estado string, pagina, limite int) ([]Tienda, int, error) {
 	offset := (pagina - 1) * limite
 
 	whereClause := ""
 	var args []interface{}
-	if estado == "activas" {
+	if estado == "activo" {
 		whereClause = "WHERE activo = 1"
-	} else if estado == "inactivas" {
+	} else if estado == "inactivo" {
 		whereClause = "WHERE activo = 0"
 	}
 
