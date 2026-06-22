@@ -41,6 +41,9 @@ func NewServiceWithCost(repo EmpleadoRepository, cost int) EmpleadoService {
 // rolesConTienda son los roles que requieren tienda_id.
 var rolesConTienda = map[string]bool{"lider_tienda": true, "barista": true}
 
+// tiposDocumentoValidos es el conjunto cerrado de tipos de documento aceptados (RF-EMP-01.9).
+var tiposDocumentoValidos = map[string]bool{"CC": true, "CE": true, "NUIP": true, "PE": true}
+
 // CrearEmpleado registra un nuevo empleado con contraseña temporal.
 func (s *empleadoService) CrearEmpleado(ctx context.Context, actorID uint64, req CrearEmpleadoRequest) (*CrearEmpleadoResponse, error) {
 	// Validar campos obligatorios.
@@ -67,6 +70,13 @@ func (s *empleadoService) CrearEmpleado(ctx context.Context, actorID uint64, req
 	}
 	if req.Rol == "admin" && req.TiendaID != nil {
 		return nil, &ValidationError{Codigo: "tienda_no_permitida_para_admin", Mensaje: "El rol admin no puede tener tienda asignada.", Campo: "tienda_id"}
+	}
+
+	// Validar tipo_documento si se proporciona (RF-EMP-01.9).
+	if req.TipoDocumento != nil && *req.TipoDocumento != "" {
+		if !tiposDocumentoValidos[*req.TipoDocumento] {
+			return nil, &ValidationError{Codigo: "tipo_documento_invalido", Mensaje: "El tipo de documento no es válido. Valores permitidos: CC, CE, NUIP, PE.", Campo: "tipo_documento"}
+		}
 	}
 
 	// Verificar unicidad del usuario.
@@ -167,6 +177,9 @@ func (s *empleadoService) EditarEmpleado(ctx context.Context, actorID, empleadoI
 		updated.Apellido = *req.Apellido
 	}
 	if req.TipoDocumento != nil {
+		if *req.TipoDocumento != "" && !tiposDocumentoValidos[*req.TipoDocumento] {
+			return nil, &ValidationError{Codigo: "tipo_documento_invalido", Mensaje: "El tipo de documento no es válido. Valores permitidos: CC, CE, NUIP, PE.", Campo: "tipo_documento"}
+		}
 		updated.TipoDocumento = req.TipoDocumento
 	}
 	if req.NumeroDocumento != nil {
