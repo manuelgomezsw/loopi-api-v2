@@ -23,6 +23,7 @@ func TestCrearProveedorExitoso(t *testing.T) {
 	svc := newSvc(t, repo)
 	resultado, err := svc.Crear(&pv.CrearProveedorRequest{
 		RazonSocial: "Distribuidora La Cosecha S.A.S", NIT: "900123456-7",
+		NombreContacto: "Carlos Rodríguez", TelefonoContacto: "3001234567",
 	}, 1, "admin")
 	if err != nil {
 		t.Fatalf("no esperaba error: %v", err)
@@ -39,6 +40,7 @@ func TestCrearProveedorNITDuplicado(t *testing.T) {
 	svc := newSvc(t, repo)
 	_, err := svc.Crear(&pv.CrearProveedorRequest{
 		RazonSocial: "Otro Proveedor", NIT: "900123456-7",
+		NombreContacto: "X", TelefonoContacto: "300",
 	}, 1, "admin")
 	if !errors.Is(err, pv.ErrNITDuplicado) {
 		t.Errorf("esperaba ErrNITDuplicado, obtuvo: %v", err)
@@ -65,11 +67,36 @@ func TestCrearProveedorSinNIT(t *testing.T) {
 	}
 }
 
+func TestCrearProveedorSinNombreContacto(t *testing.T) {
+	repo := &mockRepo{}
+	svc := newSvc(t, repo)
+	_, err := svc.Crear(&pv.CrearProveedorRequest{
+		RazonSocial: "Proveedor Y", NIT: "PROV-003", TelefonoContacto: "300",
+	}, 1, "admin")
+	var valErr *pv.ValidationError
+	if !errors.As(err, &valErr) || valErr.Codigo != "campo_requerido" || valErr.Campo != "nombre_contacto" {
+		t.Errorf("esperaba ValidationError campo_requerido/nombre_contacto, obtuvo: %v", err)
+	}
+}
+
+func TestCrearProveedorSinTelefonoContacto(t *testing.T) {
+	repo := &mockRepo{}
+	svc := newSvc(t, repo)
+	_, err := svc.Crear(&pv.CrearProveedorRequest{
+		RazonSocial: "Proveedor Z", NIT: "PROV-004", NombreContacto: "X",
+	}, 1, "admin")
+	var valErr *pv.ValidationError
+	if !errors.As(err, &valErr) || valErr.Codigo != "campo_requerido" || valErr.Campo != "telefono_contacto" {
+		t.Errorf("esperaba ValidationError campo_requerido/telefono_contacto, obtuvo: %v", err)
+	}
+}
+
 func TestCrearProveedorEmailInvalido(t *testing.T) {
 	repo := &mockRepo{}
 	svc := newSvc(t, repo)
 	_, err := svc.Crear(&pv.CrearProveedorRequest{
-		RazonSocial: "Proveedor X", NIT: "PROV-003", EmailContacto: strPtr("no-es-un-email"),
+		RazonSocial: "Proveedor X", NIT: "PROV-003",
+		NombreContacto: "X", TelefonoContacto: "300", EmailContacto: strPtr("no-es-un-email"),
 	}, 1, "admin")
 	var valErr *pv.ValidationError
 	if !errors.As(err, &valErr) || valErr.Codigo != "email_invalido" {
@@ -130,6 +157,32 @@ func TestEditarProveedorCampoVacio(t *testing.T) {
 	var valErr *pv.ValidationError
 	if !errors.As(err, &valErr) || valErr.Codigo != "campo_vacio" {
 		t.Errorf("esperaba ValidationError campo_vacio, obtuvo: %v", err)
+	}
+}
+
+func TestEditarProveedorNombreContactoVacio(t *testing.T) {
+	p := proveedorEjemplo()
+	repo := &mockRepo{
+		obtenerPorIDFunc: func(uint64) (*pv.Proveedor, error) { return p, nil },
+	}
+	svc := newSvc(t, repo)
+	_, err := svc.Editar(p.ID, &pv.EditarProveedorRequest{NombreContacto: strPtr("")}, 1, "admin")
+	var valErr *pv.ValidationError
+	if !errors.As(err, &valErr) || valErr.Codigo != "campo_vacio" || valErr.Campo != "nombre_contacto" {
+		t.Errorf("esperaba ValidationError campo_vacio/nombre_contacto, obtuvo: %v", err)
+	}
+}
+
+func TestEditarProveedorTelefonoContactoVacio(t *testing.T) {
+	p := proveedorEjemplo()
+	repo := &mockRepo{
+		obtenerPorIDFunc: func(uint64) (*pv.Proveedor, error) { return p, nil },
+	}
+	svc := newSvc(t, repo)
+	_, err := svc.Editar(p.ID, &pv.EditarProveedorRequest{TelefonoContacto: strPtr("")}, 1, "admin")
+	var valErr *pv.ValidationError
+	if !errors.As(err, &valErr) || valErr.Codigo != "campo_vacio" || valErr.Campo != "telefono_contacto" {
+		t.Errorf("esperaba ValidationError campo_vacio/telefono_contacto, obtuvo: %v", err)
 	}
 }
 

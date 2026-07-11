@@ -93,10 +93,12 @@ func ctxRol(rol string) context.Context {
 
 func proveedorEjemplo() *pv.Proveedor {
 	return &pv.Proveedor{
-		ID:          1,
-		RazonSocial: "Distribuidora La Cosecha S.A.S",
-		NIT:         "900123456-7",
-		Activo:      true,
+		ID:               1,
+		RazonSocial:      "Distribuidora La Cosecha S.A.S",
+		NIT:              "900123456-7",
+		NombreContacto:   "Carlos Rodríguez",
+		TelefonoContacto: "3001234567",
+		Activo:           true,
 	}
 }
 

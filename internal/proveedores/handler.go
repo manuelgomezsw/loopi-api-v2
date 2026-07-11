@@ -35,7 +35,7 @@ type Metrics struct {
 func NewMetrics() (*Metrics, error) {
 	meter := otel.Meter(otelScope)
 	dur, err := meter.Float64Histogram(
-		"catalogo.proveedor.request.duration",
+		"proveedores.request.duration",
 		metric.WithDescription("Duración de requests de proveedores en milisegundos"),
 		metric.WithUnit("ms"),
 	)
@@ -43,7 +43,7 @@ func NewMetrics() (*Metrics, error) {
 		return nil, err
 	}
 	cnt, err := meter.Int64Counter(
-		"catalogo.proveedor.request.total",
+		"proveedores.request.total",
 		metric.WithDescription("Conteo de requests de proveedores por operación y resultado"),
 	)
 	if err != nil {

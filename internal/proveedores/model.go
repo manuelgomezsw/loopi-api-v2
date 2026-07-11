@@ -7,8 +7,8 @@ type Proveedor struct {
 	ID               uint64    `json:"id"`
 	RazonSocial      string    `json:"razon_social"`
 	NIT              string    `json:"nit"`
-	NombreContacto   *string   `json:"nombre_contacto"`
-	TelefonoContacto *string   `json:"telefono_contacto"`
+	NombreContacto   string    `json:"nombre_contacto"`
+	TelefonoContacto string    `json:"telefono_contacto"`
 	EmailContacto    *string   `json:"email_contacto"`
 	Activo           bool      `json:"activo"`
 	CreadoEn         time.Time `json:"creado_en"`
@@ -25,8 +25,8 @@ type ProveedorDetalleResponse struct {
 type CrearProveedorRequest struct {
 	RazonSocial      string  `json:"razon_social"`
 	NIT              string  `json:"nit"`
-	NombreContacto   *string `json:"nombre_contacto"`
-	TelefonoContacto *string `json:"telefono_contacto"`
+	NombreContacto   string  `json:"nombre_contacto"`
+	TelefonoContacto string  `json:"telefono_contacto"`
 	EmailContacto    *string `json:"email_contacto"`
 }
 

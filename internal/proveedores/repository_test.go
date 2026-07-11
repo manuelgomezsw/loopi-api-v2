@@ -49,7 +49,10 @@ func TestRepository_Crear_Exitoso(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	expectObtenerPorID(mock, p)
 
-	resultado, err := repo.Crear(&pv.CrearProveedorRequest{RazonSocial: p.RazonSocial, NIT: p.NIT})
+	resultado, err := repo.Crear(&pv.CrearProveedorRequest{
+		RazonSocial: p.RazonSocial, NIT: p.NIT,
+		NombreContacto: p.NombreContacto, TelefonoContacto: p.TelefonoContacto,
+	})
 	if err != nil {
 		t.Fatalf("no esperaba error: %v", err)
 	}

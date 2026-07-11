@@ -59,6 +59,12 @@ func (s *service) Crear(req *CrearProveedorRequest, userID uint64, rol string) (
 	if req.NIT == "" {
 		return nil, &ValidationError{Codigo: "campo_requerido", Mensaje: "El NIT es obligatorio.", Campo: "nit"}
 	}
+	if req.NombreContacto == "" {
+		return nil, &ValidationError{Codigo: "campo_requerido", Mensaje: "El nombre de contacto es obligatorio.", Campo: "nombre_contacto"}
+	}
+	if req.TelefonoContacto == "" {
+		return nil, &ValidationError{Codigo: "campo_requerido", Mensaje: "El teléfono de contacto es obligatorio.", Campo: "telefono_contacto"}
+	}
 	if err := validarEmail(req.EmailContacto); err != nil {
 		return nil, err
 	}
@@ -111,6 +117,12 @@ func (s *service) Editar(id uint64, req *EditarProveedorRequest, userID uint64, 
 		if existe {
 			return nil, ErrNITDuplicado
 		}
+	}
+	if req.NombreContacto != nil && *req.NombreContacto == "" {
+		return nil, &ValidationError{Codigo: "campo_vacio", Mensaje: "El nombre de contacto no puede quedar vacío.", Campo: "nombre_contacto"}
+	}
+	if req.TelefonoContacto != nil && *req.TelefonoContacto == "" {
+		return nil, &ValidationError{Codigo: "campo_vacio", Mensaje: "El teléfono de contacto no puede quedar vacío.", Campo: "telefono_contacto"}
 	}
 	if err := validarEmail(req.EmailContacto); err != nil {
 		return nil, err
