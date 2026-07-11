@@ -18,6 +18,7 @@ import (
 	"github.com/manuelgomezsw/loopi-api-v2/internal/empleados"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/jobs"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/observability"
+	"github.com/manuelgomezsw/loopi-api-v2/internal/proveedores"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/tiendas"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/unidades_medida"
 )
@@ -146,6 +147,20 @@ func main() {
 	catHandler := categorias.NewHandlerWithMetrics(catSvc, catMetrics)
 	catHandler.RegisterRoutes(mux, jwtMiddleware)
 
+	// Módulo de proveedores del catálogo.
+	provMetrics, err := proveedores.NewMetrics()
+	if err != nil {
+		log.Fatalf("error al inicializar métricas de proveedores: %v", err)
+	}
+	rawProvRepo := proveedores.NewRepository(db)
+	provRepo, err := proveedores.NewCachedRepository(rawProvRepo, cacheTTL)
+	if err != nil {
+		log.Fatalf("cache proveedores: %v", err)
+	}
+	provSvc := proveedores.NewService(provRepo)
+	provHandler := proveedores.NewHandlerWithMetrics(provSvc, provMetrics)
+	provHandler.RegisterRoutes(mux, jwtMiddleware)
+
 	// Job de limpieza — sin middleware JWT, con validación de header X-CloudScheduler.
 	mux.HandleFunc("POST /internal/jobs/limpiar_tokens_revocados",
 		jobs.LimpiarTokensHandler(authRepo))
@@ -155,7 +170,7 @@ func main() {
 	allowedOrigin := corsOrigin()
 	corsHandler := cors.New(cors.Options{
 		AllowedOrigins:   []string{allowedOrigin},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "X-XSRF-TOKEN"},
 		AllowCredentials: true,
 	}).Handler(mux)
