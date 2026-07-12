@@ -3,11 +3,13 @@ package inventarios
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 )
 
 // Handler maneja los requests HTTP para inventarios
 type Handler struct {
 	service Service
+	// TODO: Agregar *otel.Tracer para instrumentación OpenTelemetry
 }
 
 // NewHandler crea una nueva instancia del handler
@@ -18,11 +20,18 @@ func NewHandler(service Service) *Handler {
 // GetSugerencia retorna la sugerencia de tipo/horario basada en la hora actual
 // GET /api/v1/inventarios/sugerencia
 func (h *Handler) GetSugerencia(w http.ResponseWriter, r *http.Request) {
+	// TODO: ctx, span := h.tracer.Start(r.Context(), "inventario.sugerencia.get")
+	// TODO: defer span.End()
+
 	sugerencia, err := h.service.Sugerir(r.Context())
 	if err != nil {
+		// TODO: span.RecordError(err)
+		// TODO: span.SetAttributes(attribute.String("resultado", "error"))
 		h.respondError(w, http.StatusBadRequest, "error", err.Error())
 		return
 	}
+
+	// TODO: span.SetAttributes(attribute.String("resultado", "success"))
 	h.respondJSON(w, http.StatusOK, sugerencia)
 }
 
@@ -177,6 +186,10 @@ func (h *Handler) respondError(w http.ResponseWriter, status int, errCode, messa
 }
 
 func parseID(s string, id *int64) (bool, error) {
-	// TODO: Usar strconv.ParseInt(s, 10, 64)
+	parsed, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return false, err
+	}
+	*id = parsed
 	return true, nil
 }
