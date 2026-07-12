@@ -2,6 +2,7 @@ package inventarios
 
 import (
 	"context"
+	"log/slog"
 	"time"
 )
 
@@ -51,22 +52,36 @@ type FiltrosInventario struct {
 
 // ServiceImpl implementa la interfaz Service
 type ServiceImpl struct {
-	repo Repository
+	repo   Repository
+	logger *slog.Logger
 }
 
 // NewService crea una nueva instancia del servicio
 func NewService(repo Repository) Service {
-	return &ServiceImpl{repo: repo}
+	return &ServiceImpl{
+		repo:   repo,
+		logger: slog.Default(),
+	}
 }
 
 func (s *ServiceImpl) Iniciar(ctx context.Context, req *CreateInventarioReq, userID, roleID int64) (*InventarioResp, error) {
+	s.logger.InfoContext(ctx, "inventario.iniciar: iniciando",
+		"tienda_id", req.TiendaID,
+		"tipo", req.Tipo)
+
 	// Validar tipo
 	if err := s.ValidarTipo(req.Tipo); err != nil {
+		s.logger.WarnContext(ctx, "inventario.iniciar: tipo inválido",
+			"tipo", req.Tipo,
+			"error", err.Error())
 		return nil, err
 	}
 
 	// Validar horario según tipo
 	if err := s.ValidarHorario(req.Horario, req.Tipo); err != nil {
+		s.logger.WarnContext(ctx, "inventario.iniciar: horario inválido",
+			"tipo", req.Tipo,
+			"error", err.Error())
 		return nil, err
 	}
 
@@ -87,14 +102,25 @@ func (s *ServiceImpl) Iniciar(ctx context.Context, req *CreateInventarioReq, use
 	// Guardar en BD
 	createdInv, err := s.repo.CreateInventario(ctx, inv)
 	if err != nil {
+		s.logger.ErrorContext(ctx, "inventario.iniciar: error creando",
+			"tienda_id", req.TiendaID,
+			"error", err.Error())
 		return nil, err
 	}
 
 	// Obtener detalles con valores sugeridos
 	createdInv, err = s.repo.GetInventarioDetalle(ctx, createdInv.ID)
 	if err != nil {
+		s.logger.ErrorContext(ctx, "inventario.iniciar: error obteniendo detalles",
+			"inventario_id", createdInv.ID,
+			"error", err.Error())
 		return nil, err
 	}
+
+	s.logger.InfoContext(ctx, "inventario.iniciar: success",
+		"inventario_id", createdInv.ID,
+		"tienda_id", createdInv.TiendaID,
+		"items_count", len(createdInv.Items))
 
 	return s.mapInventarioToResp(createdInv), nil
 }
@@ -127,29 +153,55 @@ func (s *ServiceImpl) mapInventarioToResp(inv *Inventario) *InventarioResp {
 }
 
 func (s *ServiceImpl) RegistrarValor(ctx context.Context, inventarioID, itemID int64, valorReal float64, userID int64) (*ItemDetailResp, error) {
+	s.logger.InfoContext(ctx, "inventario.registrar: iniciando",
+		"inventario_id", inventarioID,
+		"item_id", itemID,
+		"valor_real", valorReal)
+
 	// Obtener inventario para verificar estado y responsable
 	inv, err := s.repo.GetInventario(ctx, inventarioID)
 	if err != nil {
+		s.logger.ErrorContext(ctx, "inventario.registrar: error obteniendo",
+			"inventario_id", inventarioID,
+			"error", err.Error())
 		return nil, err
 	}
 
 	if inv == nil {
+		s.logger.WarnContext(ctx, "inventario.registrar: not found",
+			"inventario_id", inventarioID)
 		return nil, NewError("not_found", "inventario no encontrado")
 	}
 
 	if inv.Estado != EstadoEnProgreso {
+		s.logger.WarnContext(ctx, "inventario.registrar: estado inválido",
+			"inventario_id", inventarioID,
+			"estado", inv.Estado)
 		return nil, NewError("conteo_bloqueado", "solo se pueden registrar valores en conteos en progreso")
 	}
 
 	if inv.ResponsableID != userID {
+		s.logger.WarnContext(ctx, "inventario.registrar: sin autorización",
+			"inventario_id", inventarioID,
+			"responsable_id", inv.ResponsableID,
+			"user_id", userID)
 		return nil, NewError("conteo_bloqueado", "solo el responsable puede registrar valores")
 	}
 
 	// Actualizar detalle con valor real
 	detail, err := s.repo.UpdateDetalle(ctx, inventarioID, itemID, valorReal)
 	if err != nil {
+		s.logger.ErrorContext(ctx, "inventario.registrar: error actualizando",
+			"inventario_id", inventarioID,
+			"item_id", itemID,
+			"error", err.Error())
 		return nil, err
 	}
+
+	s.logger.InfoContext(ctx, "inventario.registrar: success",
+		"inventario_id", inventarioID,
+		"item_id", itemID,
+		"diferencia", detail.Diferencia)
 
 	return &ItemDetailResp{
 		ID:            detail.ID,
@@ -162,41 +214,75 @@ func (s *ServiceImpl) RegistrarValor(ctx context.Context, inventarioID, itemID i
 }
 
 func (s *ServiceImpl) Confirmar(ctx context.Context, inventarioID int64, userID int64) (*InventarioResp, error) {
+	s.logger.InfoContext(ctx, "inventario.confirmar: iniciando",
+		"inventario_id", inventarioID)
+
 	// Obtener inventario
 	inv, err := s.repo.GetInventarioDetalle(ctx, inventarioID)
 	if err != nil {
+		s.logger.ErrorContext(ctx, "inventario.confirmar: error obteniendo",
+			"inventario_id", inventarioID,
+			"error", err.Error())
 		return nil, err
 	}
 
 	if inv == nil {
+		s.logger.WarnContext(ctx, "inventario.confirmar: not found",
+			"inventario_id", inventarioID)
 		return nil, NewError("not_found", "inventario no encontrado")
 	}
 
 	if inv.Estado != EstadoEnProgreso {
+		s.logger.WarnContext(ctx, "inventario.confirmar: ya completado",
+			"inventario_id", inventarioID,
+			"estado", inv.Estado)
 		return nil, NewError("ya_completado", "conteo ya está completado")
 	}
 
 	if inv.ResponsableID != userID {
+		s.logger.WarnContext(ctx, "inventario.confirmar: sin autorización",
+			"inventario_id", inventarioID,
+			"responsable_id", inv.ResponsableID,
+			"user_id", userID)
 		return nil, NewError("conteo_bloqueado", "solo el responsable puede confirmar")
 	}
 
 	// Verificar que todos los items tengan valor_real
+	var itemsSinRegistrar []int64
 	for _, item := range inv.Items {
 		if item.ValorReal == nil {
-			return nil, NewError("items_sin_registrar", "todos los items deben tener un valor registrado")
+			itemsSinRegistrar = append(itemsSinRegistrar, item.ItemID)
 		}
+	}
+
+	if len(itemsSinRegistrar) > 0 {
+		s.logger.WarnContext(ctx, "inventario.confirmar: items sin registrar",
+			"inventario_id", inventarioID,
+			"items_count", len(itemsSinRegistrar))
+		return nil, NewError("items_sin_registrar", "todos los items deben tener un valor registrado")
 	}
 
 	// Confirmar (marcar como completado)
 	confirmedInv, err := s.repo.ConfirmarInventario(ctx, inventarioID)
 	if err != nil {
+		s.logger.ErrorContext(ctx, "inventario.confirmar: error confirmando",
+			"inventario_id", inventarioID,
+			"error", err.Error())
 		return nil, err
 	}
 
 	confirmedInv, err = s.repo.GetInventarioDetalle(ctx, confirmedInv.ID)
 	if err != nil {
+		s.logger.ErrorContext(ctx, "inventario.confirmar: error obteniendo detalles",
+			"inventario_id", inventarioID,
+			"error", err.Error())
 		return nil, err
 	}
+
+	s.logger.InfoContext(ctx, "inventario.confirmar: success",
+		"inventario_id", confirmedInv.ID,
+		"completado_en", confirmedInv.CompletadoEn,
+		"items_count", len(confirmedInv.Items))
 
 	return s.mapInventarioToResp(confirmedInv), nil
 }
