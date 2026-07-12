@@ -99,42 +99,154 @@ func (r *RepositoryImpl) CreateInventario(ctx context.Context, inventario *Inven
 }
 
 func (r *RepositoryImpl) CreateDetalleInventario(ctx context.Context, detalles []DetalleInventario) error {
-	// SQL: INSERT INTO detalle_inventario (inventario_id, item_id, inventario_referencia_id, valor_sugerido, valor_esperado, creado_en, actualizado_en)
-	// VALUES (?, ?, ?, ?, ?, ?, ?) for each detail
-	// Debe calcularse valor_sugerido usando formula RF-INV-02.2:
-	// valor_sugerido = stock_referencia + compras - ventas - mermas
+	query := `
+		INSERT INTO detalle_inventario
+		(inventario_id, item_id, inventario_referencia_id, valor_sugerido, valor_esperado, creado_en, actualizado_en)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`
+
+	stmt, err := r.db.PrepareContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("error preparando statement: %w", err)
+	}
+	defer stmt.Close()
+
+	now := time.Now()
+	for _, detail := range detalles {
+		_, err := stmt.ExecContext(ctx,
+			detail.InventarioID,
+			detail.ItemID,
+			detail.InventarioReferenciaID,
+			detail.ValorSugerido,
+			detail.ValorEsperado,
+			now,
+			now,
+		)
+		if err != nil {
+			return fmt.Errorf("error insertando detalle: %w", err)
+		}
+	}
+
 	return nil
 }
 
 func (r *RepositoryImpl) GetInventario(ctx context.Context, id int64) (*Inventario, error) {
-	// SQL: SELECT * FROM inventarios WHERE id = ?
-	inv := &Inventario{ID: id}
+	query := `
+		SELECT id, tienda_id, fecha, tipo, horario, estado, responsable_id,
+		       iniciado_en, completado_en, creado_en, actualizado_en
+		FROM inventarios WHERE id = ?
+	`
+
+	inv := &Inventario{}
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&inv.ID, &inv.TiendaID, &inv.Fecha, &inv.Tipo, &inv.Horario,
+		&inv.Estado, &inv.ResponsableID, &inv.IniciadoEn, &inv.CompletadoEn,
+		&inv.CreadoEn, &inv.ActualizadoEn,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, NewError("not_found", "inventario no encontrado")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("error obteniendo inventario: %w", err)
+	}
+
 	return inv, nil
 }
 
 func (r *RepositoryImpl) GetInventarioDetalle(ctx context.Context, id int64) (*Inventario, error) {
-	// SQL: SELECT * FROM inventarios WHERE id = ? UNION
-	// SELECT * FROM detalle_inventario WHERE inventario_id = ? ORDER BY id
-	inv := &Inventario{
-		ID:    id,
-		Items: []DetalleInventario{},
+	inv, err := r.GetInventario(ctx, id)
+	if err != nil {
+		return nil, err
 	}
-	return inv, nil
+
+	query := `
+		SELECT id, inventario_id, item_id, inventario_referencia_id,
+		       valor_sugerido, valor_esperado, valor_real, diferencia,
+		       creado_en, actualizado_en
+		FROM detalle_inventario WHERE inventario_id = ?
+		ORDER BY id
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, id)
+	if err != nil {
+		return nil, fmt.Errorf("error obteniendo detalles: %w", err)
+	}
+	defer rows.Close()
+
+	inv.Items = []DetalleInventario{}
+	for rows.Next() {
+		detail := DetalleInventario{}
+		err := rows.Scan(
+			&detail.ID, &detail.InventarioID, &detail.ItemID, &detail.InventarioReferenciaID,
+			&detail.ValorSugerido, &detail.ValorEsperado, &detail.ValorReal, &detail.Diferencia,
+			&detail.CreadoEn, &detail.ActualizadoEn,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error scanneando detalle: %w", err)
+		}
+		inv.Items = append(inv.Items, detail)
+	}
+
+	return inv, rows.Err()
 }
 
 func (r *RepositoryImpl) ListInventarios(ctx context.Context, filtros *FiltrosInventario) ([]*Inventario, int64, error) {
-	// SQL: SELECT * FROM inventarios
-	// WHERE (tienda_id = ? OR ? IS NULL)
-	// AND (tipo = ? OR ? IS NULL)
-	// AND (estado = ? OR ? IS NULL)
-	// AND (fecha >= ? OR ? IS NULL)
-	// AND (fecha <= ? OR ? IS NULL)
-	// ORDER BY fecha DESC
-	// LIMIT ? OFFSET ?
-	// También contar total con COUNT(*)
+	whereClause := "WHERE 1=1"
+	args := []interface{}{}
+
+	if filtros.TiendaID != nil {
+		whereClause += " AND tienda_id = ?"
+		args = append(args, *filtros.TiendaID)
+	}
+	if filtros.Tipo != nil {
+		whereClause += " AND tipo = ?"
+		args = append(args, *filtros.Tipo)
+	}
+	if filtros.Estado != nil {
+		whereClause += " AND estado = ?"
+		args = append(args, *filtros.Estado)
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM inventarios %s", whereClause)
+	var total int64
+	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error contando inventarios: %w", err)
+	}
+
+	offset := (int64(filtros.Pagina) - 1) * int64(filtros.PorPagina)
+	selectQuery := fmt.Sprintf(`
+		SELECT id, tienda_id, fecha, tipo, horario, estado, responsable_id,
+		       iniciado_en, completado_en, creado_en, actualizado_en
+		FROM inventarios %s
+		ORDER BY fecha DESC
+		LIMIT ? OFFSET ?
+	`, whereClause)
+
+	args = append(args, filtros.PorPagina, offset)
+
+	rows, err := r.db.QueryContext(ctx, selectQuery, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error listando inventarios: %w", err)
+	}
+	defer rows.Close()
+
 	inventarios := []*Inventario{}
-	total := int64(0)
-	return inventarios, total, nil
+	for rows.Next() {
+		inv := &Inventario{}
+		err := rows.Scan(
+			&inv.ID, &inv.TiendaID, &inv.Fecha, &inv.Tipo, &inv.Horario,
+			&inv.Estado, &inv.ResponsableID, &inv.IniciadoEn, &inv.CompletadoEn,
+			&inv.CreadoEn, &inv.ActualizadoEn,
+		)
+		if err != nil {
+			return nil, 0, fmt.Errorf("error scanneando inventario: %w", err)
+		}
+		inventarios = append(inventarios, inv)
+	}
+
+	return inventarios, total, rows.Err()
 }
 
 func (r *RepositoryImpl) UpdateDetalle(ctx context.Context, inventarioID, itemID int64, valorReal float64) (*DetalleInventario, error) {
@@ -216,11 +328,30 @@ func (r *RepositoryImpl) ConfirmarInventario(ctx context.Context, id int64) (*In
 }
 
 func (r *RepositoryImpl) DeleteInventario(ctx context.Context, id int64) error {
-	// SQL: BEGIN TRANSACTION
-	// DELETE FROM detalle_inventario WHERE inventario_id = ?
-	// DELETE FROM inventarios WHERE id = ?
-	// COMMIT
-	return nil
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("error iniciando transacción: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Eliminar detalles
+	_, err = tx.ExecContext(ctx, "DELETE FROM detalle_inventario WHERE inventario_id = ?", id)
+	if err != nil {
+		return fmt.Errorf("error eliminando detalles: %w", err)
+	}
+
+	// Eliminar inventario
+	result, err := tx.ExecContext(ctx, "DELETE FROM inventarios WHERE id = ?", id)
+	if err != nil {
+		return fmt.Errorf("error eliminando inventario: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil || rows == 0 {
+		return NewError("not_found", "inventario no encontrado")
+	}
+
+	return tx.Commit()
 }
 
 func (r *RepositoryImpl) GetStockReferenciaByTipo(ctx context.Context, tiendaID int64, tipo Tipo, itemID int64) (*Inventario, float64, error) {
