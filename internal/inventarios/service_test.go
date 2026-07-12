@@ -55,7 +55,7 @@ func (m *MockRepository) UpdateDetalle(ctx context.Context, inventarioID, itemID
 	return &DetalleInventario{}, nil
 }
 
-func (m *MockRepository) UpdateDetalleCompletado(ctx context.Context, id int64, valorReal float64) (*DetalleInventario, error) {
+func (m *MockRepository) UpdateDetalleCompletado(ctx context.Context, inventarioID, itemID int64, valorReal float64) (*DetalleInventario, error) {
 	return &DetalleInventario{}, nil
 }
 
@@ -185,7 +185,207 @@ func TestIniciar(t *testing.T) {
 	}
 }
 
-// Helper function
+func TestRegistrarValor(t *testing.T) {
+	mockRepo := NewMockRepository()
+	svc := NewService(mockRepo)
+	ctx := context.Background()
+
+	// Crear inventario base
+	inv := &Inventario{
+		TiendaID:      1,
+		Tipo:          TipoDiario,
+		Estado:        EstadoEnProgreso,
+		ResponsableID: 123,
+		Items: []DetalleInventario{
+			{ItemID: 1, ValorEsperado: 10},
+		},
+	}
+	createdInv, _ := mockRepo.CreateInventario(ctx, inv)
+
+	tests := []struct {
+		name      string
+		invID     int64
+		itemID    int64
+		valorReal float64
+		userID    int64
+		wantErr   bool
+	}{
+		{"success", createdInv.ID, 1, 12.5, 123, false},
+		{"not found", 999, 1, 12.5, 123, true},
+		{"wrong responsable", createdInv.ID, 1, 12.5, 999, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := svc.RegistrarValor(ctx, tt.invID, tt.itemID, tt.valorReal, tt.userID)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("RegistrarValor() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && resp == nil {
+				t.Errorf("RegistrarValor() retornó nil response")
+			}
+		})
+	}
+}
+
+func TestConfirmar(t *testing.T) {
+	mockRepo := NewMockRepository()
+	svc := NewService(mockRepo)
+	ctx := context.Background()
+
+	// Crear inventario con item registrado
+	inv := &Inventario{
+		TiendaID:      1,
+		Tipo:          TipoDiario,
+		Estado:        EstadoEnProgreso,
+		ResponsableID: 123,
+		Items: []DetalleInventario{
+			{ItemID: 1, ValorReal: ptrFloat64(10)},
+		},
+	}
+	createdInv, _ := mockRepo.CreateInventario(ctx, inv)
+	createdInv, _ = mockRepo.GetInventarioDetalle(ctx, createdInv.ID)
+
+	tests := []struct {
+		name    string
+		invID   int64
+		userID  int64
+		wantErr bool
+	}{
+		{"success", createdInv.ID, 123, false},
+		{"not found", 999, 123, true},
+		{"wrong responsable", createdInv.ID, 999, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := svc.Confirmar(ctx, tt.invID, tt.userID)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Confirmar() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && resp.Estado != EstadoCompletado {
+				t.Errorf("Confirmar() Estado = %v, want %v", resp.Estado, EstadoCompletado)
+			}
+		})
+	}
+}
+
+func TestListar(t *testing.T) {
+	svc := NewService(NewMockRepository())
+	ctx := context.Background()
+
+	filtros := &FiltrosInventario{
+		Pagina:    1,
+		PorPagina: 50,
+	}
+
+	resp, err := svc.Listar(ctx, filtros, 123, 1)
+	if err != nil {
+		t.Fatalf("Listar() error = %v", err)
+	}
+
+	if resp == nil {
+		t.Errorf("Listar() retornó nil")
+	}
+
+	if resp.Total != 0 {
+		t.Errorf("Listar() Total = %d, want 0", resp.Total)
+	}
+}
+
+func TestBuscar(t *testing.T) {
+	mockRepo := NewMockRepository()
+	svc := NewService(mockRepo)
+	ctx := context.Background()
+
+	inv := &Inventario{
+		TiendaID:      1,
+		Tipo:          TipoDiario,
+		Estado:        EstadoEnProgreso,
+		ResponsableID: 123,
+	}
+	createdInv, _ := mockRepo.CreateInventario(ctx, inv)
+
+	resp, err := svc.Buscar(ctx, createdInv.ID, 123, 1)
+	if err != nil {
+		t.Errorf("Buscar() error = %v", err)
+	}
+
+	if resp == nil {
+		t.Errorf("Buscar() retornó nil")
+	}
+
+	if resp.ID != createdInv.ID {
+		t.Errorf("Buscar() ID = %d, want %d", resp.ID, createdInv.ID)
+	}
+}
+
+func TestModificar(t *testing.T) {
+	mockRepo := NewMockRepository()
+	svc := NewService(mockRepo)
+	ctx := context.Background()
+
+	// Crear inventario completado
+	inv := &Inventario{
+		TiendaID:      1,
+		Tipo:          TipoDiario,
+		Estado:        EstadoCompletado,
+		ResponsableID: 123,
+		Items: []DetalleInventario{
+			{ItemID: 1, ValorEsperado: 10},
+		},
+	}
+	createdInv, _ := mockRepo.CreateInventario(ctx, inv)
+
+	resp, err := svc.Modificar(ctx, createdInv.ID, 1, 15.5, 123, 1)
+	if err != nil {
+		t.Errorf("Modificar() error = %v", err)
+	}
+
+	if resp == nil {
+		t.Errorf("Modificar() retornó nil")
+	}
+}
+
+func TestEliminar(t *testing.T) {
+	mockRepo := NewMockRepository()
+	svc := NewService(mockRepo)
+	ctx := context.Background()
+
+	inv := &Inventario{
+		TiendaID:      1,
+		Tipo:          TipoDiario,
+		Estado:        EstadoEnProgreso,
+		ResponsableID: 123,
+	}
+	createdInv, _ := mockRepo.CreateInventario(ctx, inv)
+
+	tests := []struct {
+		name    string
+		invID   int64
+		userID  int64
+		roleID  int64
+		wantErr bool
+	}{
+		{"success", createdInv.ID, 123, 1, false},
+		{"not found", 999, 123, 1, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := svc.Eliminar(ctx, tt.invID, tt.userID, tt.roleID)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Eliminar() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// Helper functions
 func ptrHorario(h Horario) *Horario {
 	return &h
+}
+
+func ptrFloat64(f float64) *float64 {
+	return &f
 }

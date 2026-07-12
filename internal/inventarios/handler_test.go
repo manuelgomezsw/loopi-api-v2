@@ -2,6 +2,7 @@ package inventarios
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -18,7 +19,7 @@ func NewMockService() *MockService {
 	}
 }
 
-func (m *MockService) Iniciar(ctx any, req *CreateInventarioReq, userID, roleID int64) (*InventarioResp, error) {
+func (m *MockService) Iniciar(ctx context.Context, req *CreateInventarioReq, userID, roleID int64) (*InventarioResp, error) {
 	inv := &Inventario{
 		ID:            1,
 		TiendaID:      req.TiendaID,
@@ -40,7 +41,7 @@ func (m *MockService) Iniciar(ctx any, req *CreateInventarioReq, userID, roleID 
 	}, nil
 }
 
-func (m *MockService) RegistrarValor(ctx any, inventarioID, itemID int64, valorReal float64, userID int64) (*ItemDetailResp, error) {
+func (m *MockService) RegistrarValor(ctx context.Context, inventarioID, itemID int64, valorReal float64, userID int64) (*ItemDetailResp, error) {
 	return &ItemDetailResp{
 		ID:       1,
 		ItemID:   itemID,
@@ -48,28 +49,28 @@ func (m *MockService) RegistrarValor(ctx any, inventarioID, itemID int64, valorR
 	}, nil
 }
 
-func (m *MockService) Confirmar(ctx any, inventarioID int64, userID int64) (*InventarioResp, error) {
+func (m *MockService) Confirmar(ctx context.Context, inventarioID int64, userID int64) (*InventarioResp, error) {
 	inv := &InventarioResp{ID: inventarioID, Estado: EstadoCompletado}
 	return inv, nil
 }
 
-func (m *MockService) Listar(ctx any, filtros *FiltrosInventario, userID int64, roleID int64) (*HistorialResp, error) {
+func (m *MockService) Listar(ctx context.Context, filtros *FiltrosInventario, userID int64, roleID int64) (*HistorialResp, error) {
 	return &HistorialResp{Inventarios: []InventarioResp{}, Total: 0}, nil
 }
 
-func (m *MockService) Buscar(ctx any, inventarioID int64, userID int64, roleID int64) (*InventarioResp, error) {
+func (m *MockService) Buscar(ctx context.Context, inventarioID int64, userID int64, roleID int64) (*InventarioResp, error) {
 	return &InventarioResp{ID: inventarioID}, nil
 }
 
-func (m *MockService) Modificar(ctx any, inventarioID, itemID int64, valorReal float64, userID, roleID int64) (*ItemDetailResp, error) {
+func (m *MockService) Modificar(ctx context.Context, inventarioID, itemID int64, valorReal float64, userID, roleID int64) (*ItemDetailResp, error) {
 	return &ItemDetailResp{}, nil
 }
 
-func (m *MockService) Eliminar(ctx any, inventarioID int64, userID, roleID int64) error {
+func (m *MockService) Eliminar(ctx context.Context, inventarioID int64, userID, roleID int64) error {
 	return nil
 }
 
-func (m *MockService) Sugerir(ctx any) (*SugerenciaResp, error) {
+func (m *MockService) Sugerir(ctx context.Context) (*SugerenciaResp, error) {
 	return &SugerenciaResp{Tipo: TipoDiario, Horario: HorarioApertura}, nil
 }
 
