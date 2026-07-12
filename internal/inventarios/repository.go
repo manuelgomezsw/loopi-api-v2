@@ -2,6 +2,8 @@ package inventarios
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
 	"time"
 )
 
@@ -49,19 +51,50 @@ type Repository interface {
 
 // RepositoryImpl implementa la interfaz Repository
 type RepositoryImpl struct {
-	db interface{} // Placeholder para database connection pool
+	db *sql.DB
 }
 
 // NewRepository crea una nueva instancia del repositorio
-func NewRepository(db interface{}) Repository {
+func NewRepository(db *sql.DB) Repository {
 	return &RepositoryImpl{db: db}
 }
 
 func (r *RepositoryImpl) CreateInventario(ctx context.Context, inventario *Inventario) (*Inventario, error) {
-	// SQL: INSERT INTO inventarios (tienda_id, fecha, tipo, horario, estado, responsable_id, iniciado_en, creado_en, actualizado_en)
-	// VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
-	// Validar UNIQUE constraint violation (tienda_id, tipo, horario_norm, fecha)
-	inventario.ID = 1 // Placeholder - será asignado por BD
+	query := `
+		INSERT INTO inventarios
+		(tienda_id, fecha, tipo, horario, estado, responsable_id, iniciado_en, creado_en, actualizado_en)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+
+	now := time.Now()
+	result, err := r.db.ExecContext(ctx, query,
+		inventario.TiendaID,
+		inventario.Fecha,
+		inventario.Tipo,
+		inventario.Horario,
+		inventario.Estado,
+		inventario.ResponsableID,
+		inventario.IniciadoEn,
+		now,
+		now,
+	)
+
+	if err != nil {
+		if err.Error() == "Error 1062: Duplicate entry" {
+			return nil, NewError("conteo_duplicado", "ya existe un conteo para esta tienda, tipo y horario en esta fecha")
+		}
+		return nil, fmt.Errorf("error creando inventario: %w", err)
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("error obteniendo ID: %w", err)
+	}
+
+	inventario.ID = id
+	inventario.CreadoEn = now
+	inventario.ActualizadoEn = now
+
 	return inventario, nil
 }
 
@@ -105,16 +138,37 @@ func (r *RepositoryImpl) ListInventarios(ctx context.Context, filtros *FiltrosIn
 }
 
 func (r *RepositoryImpl) UpdateDetalle(ctx context.Context, inventarioID, itemID int64, valorReal float64) (*DetalleInventario, error) {
-	// SQL: UPDATE detalle_inventario
-	// SET valor_real = ?, diferencia = ? - valor_esperado, actualizado_en = NOW()
-	// WHERE inventario_id = ? AND item_id = ?
-	// RETURNING *
-	diferencia := valorReal // Placeholder - se calcula realmente
-	detail := &DetalleInventario{
-		ItemID:     itemID,
-		ValorReal:  &valorReal,
-		Diferencia: &diferencia,
+	query := `
+		UPDATE detalle_inventario
+		SET valor_real = ?, diferencia = ? - valor_esperado, actualizado_en = NOW()
+		WHERE inventario_id = ? AND item_id = ?
+	`
+
+	_, err := r.db.ExecContext(ctx, query, valorReal, valorReal, inventarioID, itemID)
+	if err != nil {
+		return nil, fmt.Errorf("error actualizando detalle: %w", err)
 	}
+
+	// Obtener el registro actualizado
+	selectQuery := `
+		SELECT id, inventario_id, item_id, valor_sugerido, valor_esperado,
+		       valor_real, diferencia, creado_en, actualizado_en
+		FROM detalle_inventario
+		WHERE inventario_id = ? AND item_id = ?
+	`
+
+	detail := &DetalleInventario{}
+	err = r.db.QueryRowContext(ctx, selectQuery, inventarioID, itemID).Scan(
+		&detail.ID, &detail.InventarioID, &detail.ItemID,
+		&detail.ValorSugerido, &detail.ValorEsperado,
+		&detail.ValorReal, &detail.Diferencia,
+		&detail.CreadoEn, &detail.ActualizadoEn,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("error obteniendo detalle actualizado: %w", err)
+	}
+
 	return detail, nil
 }
 
@@ -124,16 +178,40 @@ func (r *RepositoryImpl) UpdateDetalleCompletado(ctx context.Context, inventario
 }
 
 func (r *RepositoryImpl) ConfirmarInventario(ctx context.Context, id int64) (*Inventario, error) {
-	// SQL: BEGIN TRANSACTION
-	// UPDATE inventarios SET estado = 'completado', completado_en = NOW(), actualizado_en = NOW()
-	// WHERE id = ?
-	// COMMIT
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error iniciando transacción: %w", err)
+	}
+	defer tx.Rollback()
+
 	now := time.Now()
+	query := `
+		UPDATE inventarios
+		SET estado = ?, completado_en = ?, actualizado_en = ?
+		WHERE id = ?
+	`
+
+	result, err := tx.ExecContext(ctx, query, EstadoCompletado, now, now, id)
+	if err != nil {
+		return nil, fmt.Errorf("error actualizando inventario: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil || rows == 0 {
+		return nil, NewError("not_found", "inventario no encontrado")
+	}
+
+	if err = tx.Commit(); err != nil {
+		return nil, fmt.Errorf("error confirmando transacción: %w", err)
+	}
+
 	inv := &Inventario{
 		ID:           id,
 		Estado:       EstadoCompletado,
 		CompletadoEn: &now,
+		ActualizadoEn: now,
 	}
+
 	return inv, nil
 }
 
