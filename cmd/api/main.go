@@ -16,6 +16,7 @@ import (
 	"github.com/manuelgomezsw/loopi-api-v2/internal/auth"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/categorias"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/empleados"
+	"github.com/manuelgomezsw/loopi-api-v2/internal/items"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/jobs"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/observability"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/proveedores"
@@ -160,6 +161,21 @@ func main() {
 	provSvc := proveedores.NewService(provRepo)
 	provHandler := proveedores.NewHandlerWithMetrics(provSvc, provMetrics)
 	provHandler.RegisterRoutes(mux, jwtMiddleware)
+
+	// Módulo de items del catálogo.
+	itemsMetrics, err := items.NewMetrics()
+	if err != nil {
+		log.Fatalf("error al inicializar métricas de items: %v", err)
+	}
+	const itemsCacheTTL = 5 * time.Minute
+	rawItemsRepo := items.NewRepository(db)
+	itemsRepo, err := items.NewCachedRepository(rawItemsRepo, itemsCacheTTL)
+	if err != nil {
+		log.Fatalf("cache items: %v", err)
+	}
+	itemsSvc := items.NewService(itemsRepo)
+	itemsHandler := items.NewHandlerWithMetrics(itemsSvc, itemsMetrics)
+	itemsHandler.RegisterRoutes(mux, jwtMiddleware)
 
 	// Job de limpieza — sin middleware JWT, con validación de header X-CloudScheduler.
 	mux.HandleFunc("POST /internal/jobs/limpiar_tokens_revocados",
