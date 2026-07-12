@@ -355,31 +355,110 @@ func (r *RepositoryImpl) DeleteInventario(ctx context.Context, id int64) error {
 }
 
 func (r *RepositoryImpl) GetStockReferenciaByTipo(ctx context.Context, tiendaID int64, tipo Tipo, itemID int64) (*Inventario, float64, error) {
-	// SQL: SELECT i.id, di.valor_real FROM inventarios i
-	// JOIN detalle_inventario di ON i.id = di.inventario_id
-	// WHERE i.tienda_id = ? AND i.tipo = ? AND i.estado = 'completado' AND di.item_id = ?
-	// ORDER BY i.completado_en DESC LIMIT 1
-	// Si no encuentra del mismo tipo, intenta con cualquier tipo (respaldo per RD-03)
-	return nil, 0, nil
+	// Intentar obtener stock del mismo tipo
+	query := `
+		SELECT i.id, COALESCE(di.valor_real, 0)
+		FROM inventarios i
+		JOIN detalle_inventario di ON i.id = di.inventario_id
+		WHERE i.tienda_id = ? AND i.tipo = ? AND i.estado = 'completado' AND di.item_id = ?
+		ORDER BY i.completado_en DESC LIMIT 1
+	`
+
+	var invID int64
+	var stock float64
+
+	err := r.db.QueryRowContext(ctx, query, tiendaID, tipo, itemID).Scan(&invID, &stock)
+	if err == nil {
+		inv := &Inventario{ID: invID}
+		return inv, stock, nil
+	}
+
+	// Si no encuentra del mismo tipo, buscar de cualquier tipo (respaldo per RD-03)
+	queryRespaldo := `
+		SELECT i.id, COALESCE(di.valor_real, 0)
+		FROM inventarios i
+		JOIN detalle_inventario di ON i.id = di.inventario_id
+		WHERE i.tienda_id = ? AND i.estado = 'completado' AND di.item_id = ?
+		ORDER BY i.completado_en DESC LIMIT 1
+	`
+
+	err = r.db.QueryRowContext(ctx, queryRespaldo, tiendaID, itemID).Scan(&invID, &stock)
+	if err == sql.ErrNoRows {
+		return nil, 0, nil // Sin inventario de referencia - retornar 0
+	}
+	if err != nil {
+		return nil, 0, fmt.Errorf("error obteniendo stock referencia: %w", err)
+	}
+
+	inv := &Inventario{ID: invID}
+	return inv, stock, nil
 }
 
 func (r *RepositoryImpl) SumarComprasPeriodo(ctx context.Context, tiendaID int64, desde, hasta time.Time, itemID int64) (float64, error) {
-	// SQL: SELECT COALESCE(SUM(cantidad), 0) FROM compras_caja_menor
-	// WHERE tienda_id = ? AND item_id = ? AND fecha BETWEEN ? AND ?
-	// Validar que tabla existe via information_schema (RD-04)
-	return 0, nil
+	// Verificar que la tabla existe
+	tableExists, err := r.tableExists(ctx, "compras_caja_menor")
+	if err != nil || !tableExists {
+		return 0, nil // Tabla no existe - retornar 0
+	}
+
+	var suma float64
+	query := `SELECT COALESCE(SUM(cantidad), 0) FROM compras_caja_menor
+	          WHERE tienda_id = ? AND item_id = ? AND fecha BETWEEN ? AND ?`
+
+	err = r.db.QueryRowContext(ctx, query, tiendaID, itemID, desde, hasta).Scan(&suma)
+	if err != nil {
+		return 0, fmt.Errorf("error sumando compras: %w", err)
+	}
+
+	return suma, nil
 }
 
 func (r *RepositoryImpl) SumarVentasPeriodo(ctx context.Context, tiendaID int64, desde, hasta time.Time, itemID int64) (float64, error) {
-	// SQL: SELECT COALESCE(SUM(cantidad), 0) FROM ventas_lineas
-	// WHERE tienda_id = ? AND item_id = ? AND fecha BETWEEN ? AND ?
-	// Validar que tabla existe via information_schema (RD-04)
-	return 0, nil
+	// Verificar que la tabla existe
+	tableExists, err := r.tableExists(ctx, "ventas_lineas")
+	if err != nil || !tableExists {
+		return 0, nil
+	}
+
+	var suma float64
+	query := `SELECT COALESCE(SUM(cantidad), 0) FROM ventas_lineas
+	          WHERE tienda_id = ? AND item_id = ? AND fecha BETWEEN ? AND ?`
+
+	err = r.db.QueryRowContext(ctx, query, tiendaID, itemID, desde, hasta).Scan(&suma)
+	if err != nil {
+		return 0, fmt.Errorf("error sumando ventas: %w", err)
+	}
+
+	return suma, nil
 }
 
 func (r *RepositoryImpl) SumarMermasPeriodo(ctx context.Context, tiendaID int64, desde, hasta time.Time, itemID int64) (float64, error) {
-	// SQL: SELECT COALESCE(SUM(cantidad), 0) FROM mermas
-	// WHERE tienda_id = ? AND item_id = ? AND fecha BETWEEN ? AND ?
-	// Validar que tabla existe via information_schema (RD-04)
-	return 0, nil
+	// Verificar que la tabla existe
+	tableExists, err := r.tableExists(ctx, "mermas")
+	if err != nil || !tableExists {
+		return 0, nil
+	}
+
+	var suma float64
+	query := `SELECT COALESCE(SUM(cantidad), 0) FROM mermas
+	          WHERE tienda_id = ? AND item_id = ? AND fecha BETWEEN ? AND ?`
+
+	err = r.db.QueryRowContext(ctx, query, tiendaID, itemID, desde, hasta).Scan(&suma)
+	if err != nil {
+		return 0, fmt.Errorf("error sumando mermas: %w", err)
+	}
+
+	return suma, nil
+}
+
+// tableExists verifica si una tabla existe en la BD usando information_schema
+func (r *RepositoryImpl) tableExists(ctx context.Context, tableName string) (bool, error) {
+	var exists bool
+	query := `SELECT EXISTS (
+		SELECT 1 FROM information_schema.TABLES
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+	)`
+
+	err := r.db.QueryRowContext(ctx, query, tableName).Scan(&exists)
+	return exists, err
 }
