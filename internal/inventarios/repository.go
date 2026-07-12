@@ -28,7 +28,7 @@ type Repository interface {
 	UpdateDetalle(ctx context.Context, inventarioID, itemID int64, valorReal float64) (*DetalleInventario, error)
 
 	// UpdateDetalleCompletado actualiza una línea de un inventario completado
-	UpdateDetalleCompletado(ctx context.Context, id int64, valorReal float64) (*DetalleInventario, error)
+	UpdateDetalleCompletado(ctx context.Context, inventarioID, itemID int64, valorReal float64) (*DetalleInventario, error)
 
 	// ConfirmarInventario marca un inventario como completado
 	ConfirmarInventario(ctx context.Context, id int64) (*Inventario, error)
