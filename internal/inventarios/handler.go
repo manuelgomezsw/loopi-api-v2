@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/manuelgomezsw/loopi-api-v2/internal/auth"
 	"go.opentelemetry.io/otel"
@@ -486,14 +487,85 @@ func (h *Handler) DeleteInventario(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetHistorial obtiene el listado de conteos con filtros y paginación
-// GET /api/v1/inventarios
-func (h *Handler) GetHistorial(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+// parseHistorialParams parsea los query parameters y retorna un FiltrosInventario
+func (h *Handler) parseHistorialParams(r *http.Request) *FiltrosInventario {
+	q := r.URL.Query()
+
 	filtros := &FiltrosInventario{
 		Pagina:    1,
 		PorPagina: 50,
 	}
+
+	// Parsear tienda_id
+	if tiendaIDStr := q.Get("tienda_id"); tiendaIDStr != "" {
+		if id, err := strconv.ParseInt(tiendaIDStr, 10, 64); err == nil {
+			filtros.TiendaID = &id
+		}
+	}
+
+	// Parsear tipo
+	if tipoStr := q.Get("tipo"); tipoStr != "" {
+		tiposValidos := []string{"diario", "semanal", "mensual", "inicial"}
+		for _, v := range tiposValidos {
+			if tipoStr == v {
+				t := Tipo(tipoStr)
+				filtros.Tipo = &t
+				break
+			}
+		}
+	}
+
+	// Parsear estado
+	if estadoStr := q.Get("estado"); estadoStr != "" {
+		estadosValidos := []string{"en_progreso", "completado"}
+		for _, v := range estadosValidos {
+			if estadoStr == v {
+				e := Estado(estadoStr)
+				filtros.Estado = &e
+				break
+			}
+		}
+	}
+
+	// Parsear fechas
+	if desdeStr := q.Get("desde"); desdeStr != "" {
+		if fecha, err := time.Parse("2006-01-02", desdeStr); err == nil {
+			filtros.Desde = &fecha
+		}
+	}
+	if hastaStr := q.Get("hasta"); hastaStr != "" {
+		if fecha, err := time.Parse("2006-01-02", hastaStr); err == nil {
+			filtros.Hasta = &fecha
+		}
+	}
+
+	// Parsear pagina
+	if paginaStr := q.Get("pagina"); paginaStr != "" {
+		if pagina, err := strconv.Atoi(paginaStr); err == nil && pagina >= 1 {
+			filtros.Pagina = pagina
+		}
+	}
+
+	// Parsear por_pagina (máximo 200 per spec)
+	if porPaginaStr := q.Get("por_pagina"); porPaginaStr != "" {
+		if porPagina, err := strconv.Atoi(porPaginaStr); err == nil {
+			if porPagina > 200 {
+				porPagina = 200
+			} else if porPagina < 1 {
+				porPagina = 1
+			}
+			filtros.PorPagina = porPagina
+		}
+	}
+
+	return filtros
+}
+
+// GetHistorial obtiene el listado de conteos con filtros y paginación
+// GET /api/v1/inventarios
+func (h *Handler) GetHistorial(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	filtros := h.parseHistorialParams(r)
 
 	claims := ctx.Value(auth.ContextKeyClaims).(*auth.Claims)
 	if claims == nil {
