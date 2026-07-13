@@ -379,26 +379,22 @@ func (s *ServiceImpl) Sugerir(ctx context.Context) (*SugerenciaResp, error) {
 	now := time.Now()
 	hour := now.Hour()
 
-	// Sugerir tipo y horario según hora del día (Colombia)
+	// Sugerir tipo y horario según hora del día (Colombia) per RF-INV-01.2
 	// 06:00-10:59 → diario/apertura
-	// 11:00-16:59 → diario/mediodia
-	// 17:00-23:59 → diario/cierre
-	// 00:00-05:59 → no sugerir diario, permitir otro tipo
-	var tipo Tipo
+	// 11:00-14:59 → diario/mediodía
+	// 15:00-23:59 → diario/cierre
+	var tipo Tipo = TipoDiario
 	var horario Horario
 
 	if hour >= 6 && hour < 11 {
-		tipo = TipoDiario
 		horario = HorarioApertura
-	} else if hour >= 11 && hour < 17 {
-		tipo = TipoDiario
+	} else if hour >= 11 && hour < 15 {
 		horario = HorarioMediodia
-	} else if hour >= 17 {
-		tipo = TipoDiario
+	} else if hour >= 15 {
 		horario = HoriarioCierre
 	} else {
-		// Madrugada: sugerir conteo semanal sin horario
-		tipo = TipoSemanal
+		// Madrugada (00:00-05:59): sugerir diario/cierre como fallback
+		horario = HoriarioCierre
 	}
 
 	return &SugerenciaResp{

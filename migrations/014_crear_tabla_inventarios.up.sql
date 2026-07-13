@@ -16,7 +16,7 @@ CREATE TABLE inventarios (
   CONSTRAINT uq_inventarios_tienda_tipo_horario_fecha
     UNIQUE (tienda_id, tipo, horario_norm, fecha),
   CONSTRAINT fk_inventarios_tienda FOREIGN KEY (tienda_id) REFERENCES tiendas (id),
-  CONSTRAINT fk_inventarios_responsable FOREIGN KEY (responsable_id) REFERENCES usuarios (id)
+  CONSTRAINT fk_inventarios_responsable FOREIGN KEY (responsable_id) REFERENCES empleados (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE INDEX ix_inventarios_tienda_fecha ON inventarios (tienda_id, fecha DESC);

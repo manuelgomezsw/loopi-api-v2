@@ -274,3 +274,28 @@ func parseID(s string, id *int64) (bool, error) {
 	*id = parsed
 	return true, nil
 }
+
+// RegisterRoutes registra todas las rutas del módulo de inventarios en el multiplexor HTTP.
+// Aplica jwtMiddleware donde es requerido per API contracts.
+func (h *Handler) RegisterRoutes(mux *http.ServeMux, middleware func(http.Handler) http.Handler) {
+	// GET /api/v1/inventarios/sugerencia — público (no requiere autenticación)
+	mux.HandleFunc("GET /api/v1/inventarios/sugerencia", h.GetSugerencia)
+
+	// POST /api/v1/inventarios — requiere autenticación (T029)
+	mux.Handle("POST /api/v1/inventarios", middleware(http.HandlerFunc(h.PostInventario)))
+
+	// GET /api/v1/inventarios/{id} — requiere autenticación (detalle y historial, endpoint dual)
+	mux.Handle("GET /api/v1/inventarios/{id}", middleware(http.HandlerFunc(h.GetInventario)))
+
+	// PATCH /api/v1/inventarios/{id}/items/{item_id} — requiere autenticación
+	mux.Handle("PATCH /api/v1/inventarios/{id}/items/{item_id}", middleware(http.HandlerFunc(h.PatchItemValor)))
+
+	// POST /api/v1/inventarios/{id}/confirmar — requiere autenticación
+	mux.Handle("POST /api/v1/inventarios/{id}/confirmar", middleware(http.HandlerFunc(h.PostConfirmar)))
+
+	// DELETE /api/v1/inventarios/{id} — requiere autenticación (admin solo)
+	mux.Handle("DELETE /api/v1/inventarios/{id}", middleware(http.HandlerFunc(h.DeleteInventario)))
+
+	// GET /api/v1/inventarios — requiere autenticación (historial con filtros y paginación)
+	mux.Handle("GET /api/v1/inventarios", middleware(http.HandlerFunc(h.GetHistorial)))
+}
