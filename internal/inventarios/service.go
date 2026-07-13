@@ -9,7 +9,7 @@ import (
 // Service define la interfaz de la capa de negocio
 type Service interface {
 	// Iniciar inicia un nuevo conteo de inventario
-	Iniciar(ctx context.Context, req *CreateInventarioReq, userID, roleID int64) (*InventarioResp, error)
+	Iniciar(ctx context.Context, req *CreateInventarioReq, userID int64, role string) (*InventarioResp, error)
 
 	// RegistrarValor registra el valor real de un item en un conteo en progreso
 	RegistrarValor(ctx context.Context, inventarioID, itemID int64, valorReal float64, userID int64) (*ItemDetailResp, error)
@@ -18,16 +18,16 @@ type Service interface {
 	Confirmar(ctx context.Context, inventarioID int64, userID int64) (*InventarioResp, error)
 
 	// Listar obtiene el historial de conteos con filtros y paginación
-	Listar(ctx context.Context, filtros *FiltrosInventario, userID int64, roleID int64) (*HistorialResp, error)
+	Listar(ctx context.Context, filtros *FiltrosInventario, userID int64, role string) (*HistorialResp, error)
 
 	// Buscar obtiene un inventario con todos sus detalles
-	Buscar(ctx context.Context, inventarioID int64, userID int64, roleID int64) (*InventarioResp, error)
+	Buscar(ctx context.Context, inventarioID int64, userID int64, role string) (*InventarioResp, error)
 
 	// Modificar permite modificar valores de un conteo completado (solo admin)
 	Modificar(ctx context.Context, inventarioID, itemID int64, valorReal float64, userID, roleID int64) (*ItemDetailResp, error)
 
 	// Eliminar elimina un conteo en progreso (solo admin)
-	Eliminar(ctx context.Context, inventarioID int64, userID, roleID int64) error
+	Eliminar(ctx context.Context, inventarioID int64, userID int64, role string) error
 
 	// Sugerir retorna tipo y horario sugeridos según la hora actual
 	Sugerir(ctx context.Context) (*SugerenciaResp, error)
@@ -64,7 +64,7 @@ func NewService(repo Repository) Service {
 	}
 }
 
-func (s *ServiceImpl) Iniciar(ctx context.Context, req *CreateInventarioReq, userID, roleID int64) (*InventarioResp, error) {
+func (s *ServiceImpl) Iniciar(ctx context.Context, req *CreateInventarioReq, userID int64, role string) (*InventarioResp, error) {
 	s.logger.InfoContext(ctx, "inventario.iniciar: iniciando",
 		"tienda_id", req.TiendaID,
 		"tipo", req.Tipo)
@@ -287,7 +287,7 @@ func (s *ServiceImpl) Confirmar(ctx context.Context, inventarioID int64, userID 
 	return s.mapInventarioToResp(confirmedInv), nil
 }
 
-func (s *ServiceImpl) Listar(ctx context.Context, filtros *FiltrosInventario, userID int64, roleID int64) (*HistorialResp, error) {
+func (s *ServiceImpl) Listar(ctx context.Context, filtros *FiltrosInventario, userID int64, role string) (*HistorialResp, error) {
 	// TODO: Verificar autorización según rol
 	// admin: puede listar todas las tiendas
 	// lider_tienda: solo su tienda
@@ -313,7 +313,7 @@ func (s *ServiceImpl) Listar(ctx context.Context, filtros *FiltrosInventario, us
 	}, nil
 }
 
-func (s *ServiceImpl) Buscar(ctx context.Context, inventarioID int64, userID int64, roleID int64) (*InventarioResp, error) {
+func (s *ServiceImpl) Buscar(ctx context.Context, inventarioID int64, userID int64, role string) (*InventarioResp, error) {
 	// TODO: Verificar autorización
 	inv, err := s.repo.GetInventarioDetalle(ctx, inventarioID)
 	if err != nil {
@@ -357,7 +357,7 @@ func (s *ServiceImpl) Modificar(ctx context.Context, inventarioID, itemID int64,
 	}, nil
 }
 
-func (s *ServiceImpl) Eliminar(ctx context.Context, inventarioID int64, userID, roleID int64) error {
+func (s *ServiceImpl) Eliminar(ctx context.Context, inventarioID int64, userID int64, role string) error {
 	// TODO: Solo admin puede eliminar en_progreso
 	inv, err := s.repo.GetInventario(ctx, inventarioID)
 	if err != nil {
