@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -80,8 +81,8 @@ func (r *RepositoryImpl) CreateInventario(ctx context.Context, inventario *Inven
 	)
 
 	if err != nil {
-		if err.Error() == "Error 1062: Duplicate entry" {
-			return nil, NewError("conteo_duplicado", "ya existe un conteo para esta tienda, tipo y horario en esta fecha")
+		if strings.Contains(err.Error(), "1062") && strings.Contains(err.Error(), "uq_inventarios") {
+			return nil, NewError("conteo_duplicado", "Ya existe un conteo en progreso para esta tienda, tipo y horario en esta fecha")
 		}
 		return nil, fmt.Errorf("error creando inventario: %w", err)
 	}
