@@ -26,6 +26,15 @@ func NewHandler(service Service) *Handler {
 	}
 }
 
+// intPtrToInt64Ptr convierte *int a *int64
+func intPtrToInt64Ptr(p *int) *int64 {
+	if p == nil {
+		return nil
+	}
+	v := int64(*p)
+	return &v
+}
+
 // GetSugerencia retorna la sugerencia de tipo/horario basada en la hora actual
 // GET /api/v1/inventarios/sugerencia
 func (h *Handler) GetSugerencia(w http.ResponseWriter, r *http.Request) {
@@ -78,11 +87,12 @@ func (h *Handler) PostInventario(w http.ResponseWriter, r *http.Request) {
 	h.logger.InfoContext(ctx, "inventario.iniciar.post: iniciando",
 		"user_id", userID,
 		"role", claims.Rol,
+		"user_tienda_id", claims.TiendaID,
 		"tienda_id", req.TiendaID,
 		"tipo", req.Tipo,
 		"horario", req.Horario)
 
-	resp, err := h.service.Iniciar(ctx, &req, userID, claims.Rol)
+	resp, err := h.service.Iniciar(ctx, &req, userID, claims.Rol, intPtrToInt64Ptr(claims.TiendaID))
 	if err != nil {
 		h.logger.ErrorContext(ctx, "inventario.iniciar.post: error",
 			"error", err.Error(),
@@ -138,9 +148,10 @@ func (h *Handler) GetInventario(w http.ResponseWriter, r *http.Request) {
 	h.logger.InfoContext(ctx, "inventario.detalle.get: iniciando",
 		"user_id", userID,
 		"role", claims.Rol,
+		"user_tienda_id", claims.TiendaID,
 		"inventario_id", inventarioID)
 
-	resp, err := h.service.Buscar(ctx, inventarioID, userID, claims.Rol)
+	resp, err := h.service.Buscar(ctx, inventarioID, userID, claims.Rol, intPtrToInt64Ptr(claims.TiendaID))
 	if err != nil {
 		h.logger.ErrorContext(ctx, "inventario.detalle.get: not found",
 			"inventario_id", inventarioID,
@@ -338,9 +349,10 @@ func (h *Handler) DeleteInventario(w http.ResponseWriter, r *http.Request) {
 	h.logger.InfoContext(ctx, "inventario.eliminar.delete: iniciando",
 		"user_id", userID,
 		"role", claims.Rol,
+		"user_tienda_id", claims.TiendaID,
 		"inventario_id", inventarioID)
 
-	err = h.service.Eliminar(ctx, inventarioID, userID, claims.Rol)
+	err = h.service.Eliminar(ctx, inventarioID, userID, claims.Rol, intPtrToInt64Ptr(claims.TiendaID))
 	if err != nil {
 		h.logger.ErrorContext(ctx, "inventario.eliminar.delete: error",
 			"inventario_id", inventarioID,
@@ -383,10 +395,11 @@ func (h *Handler) GetHistorial(w http.ResponseWriter, r *http.Request) {
 	h.logger.InfoContext(ctx, "inventario.historial.get: iniciando",
 		"user_id", userID,
 		"role", claims.Rol,
+		"user_tienda_id", claims.TiendaID,
 		"pagina", filtros.Pagina,
 		"por_pagina", filtros.PorPagina)
 
-	resp, err := h.service.Listar(ctx, filtros, userID, claims.Rol)
+	resp, err := h.service.Listar(ctx, filtros, userID, claims.Rol, intPtrToInt64Ptr(claims.TiendaID))
 	if err != nil {
 		h.logger.ErrorContext(ctx, "inventario.historial.get: error",
 			"error", err.Error())

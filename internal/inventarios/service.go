@@ -9,7 +9,7 @@ import (
 // Service define la interfaz de la capa de negocio
 type Service interface {
 	// Iniciar inicia un nuevo conteo de inventario
-	Iniciar(ctx context.Context, req *CreateInventarioReq, userID int64, role string) (*InventarioResp, error)
+	Iniciar(ctx context.Context, req *CreateInventarioReq, userID int64, role string, userTiendaID *int64) (*InventarioResp, error)
 
 	// RegistrarValor registra el valor real de un item en un conteo en progreso
 	RegistrarValor(ctx context.Context, inventarioID, itemID int64, valorReal float64, userID int64) (*ItemDetailResp, error)
@@ -18,16 +18,16 @@ type Service interface {
 	Confirmar(ctx context.Context, inventarioID int64, userID int64) (*InventarioResp, error)
 
 	// Listar obtiene el historial de conteos con filtros y paginación
-	Listar(ctx context.Context, filtros *FiltrosInventario, userID int64, role string) (*HistorialResp, error)
+	Listar(ctx context.Context, filtros *FiltrosInventario, userID int64, role string, userTiendaID *int64) (*HistorialResp, error)
 
 	// Buscar obtiene un inventario con todos sus detalles
-	Buscar(ctx context.Context, inventarioID int64, userID int64, role string) (*InventarioResp, error)
+	Buscar(ctx context.Context, inventarioID int64, userID int64, role string, userTiendaID *int64) (*InventarioResp, error)
 
 	// Modificar permite modificar valores de un conteo completado (solo admin)
 	Modificar(ctx context.Context, inventarioID, itemID int64, valorReal float64, userID, roleID int64) (*ItemDetailResp, error)
 
 	// Eliminar elimina un conteo en progreso (solo admin)
-	Eliminar(ctx context.Context, inventarioID int64, userID int64, role string) error
+	Eliminar(ctx context.Context, inventarioID int64, userID int64, role string, userTiendaID *int64) error
 
 	// Sugerir retorna tipo y horario sugeridos según la hora actual
 	Sugerir(ctx context.Context) (*SugerenciaResp, error)
@@ -64,10 +64,24 @@ func NewService(repo Repository) Service {
 	}
 }
 
-func (s *ServiceImpl) Iniciar(ctx context.Context, req *CreateInventarioReq, userID int64, role string) (*InventarioResp, error) {
+func (s *ServiceImpl) Iniciar(ctx context.Context, req *CreateInventarioReq, userID int64, role string, userTiendaID *int64) (*InventarioResp, error) {
 	s.logger.InfoContext(ctx, "inventario.iniciar: iniciando",
+		"user_id", userID,
+		"user_role", role,
 		"tienda_id", req.TiendaID,
 		"tipo", req.Tipo)
+
+	// RBAC: Validar autorización por tienda (RF-INV-01.1)
+	if role != "admin" {
+		if userTiendaID == nil || *userTiendaID != req.TiendaID {
+			s.logger.WarnContext(ctx, "inventario.iniciar: unauthorized tienda",
+				"user_id", userID,
+				"user_role", role,
+				"user_tienda_id", userTiendaID,
+				"requested_tienda_id", req.TiendaID)
+			return nil, NewError("tienda_no_autorizada", "No tienes permiso para iniciar conteos en esta tienda")
+		}
+	}
 
 	// Validar tipo
 	if err := s.ValidarTipo(req.Tipo); err != nil {
@@ -287,11 +301,30 @@ func (s *ServiceImpl) Confirmar(ctx context.Context, inventarioID int64, userID 
 	return s.mapInventarioToResp(confirmedInv), nil
 }
 
-func (s *ServiceImpl) Listar(ctx context.Context, filtros *FiltrosInventario, userID int64, role string) (*HistorialResp, error) {
-	// TODO: Verificar autorización según rol
-	// admin: puede listar todas las tiendas
-	// lider_tienda: solo su tienda
-	// barista: no tiene acceso
+func (s *ServiceImpl) Listar(ctx context.Context, filtros *FiltrosInventario, userID int64, role string, userTiendaID *int64) (*HistorialResp, error) {
+	s.logger.InfoContext(ctx, "inventario.listar: iniciando",
+		"user_id", userID,
+		"user_role", role,
+		"user_tienda_id", userTiendaID)
+
+	// RBAC: Validar autorización según rol (RF-INV-04.1, RF-INV-04.2)
+	if role == "barista" {
+		s.logger.WarnContext(ctx, "inventario.listar: unauthorized role",
+			"user_id", userID,
+			"user_role", role)
+		return nil, NewError("sin_permiso", "Tu rol no tiene permiso para listar inventarios")
+	}
+
+	if role == "lider_tienda" {
+		if userTiendaID == nil {
+			s.logger.WarnContext(ctx, "inventario.listar: lider_tienda sin tienda",
+				"user_id", userID)
+			return nil, NewError("sin_tienda", "Tu usuario no tiene una tienda asignada")
+		}
+		// Filtrar solo por tienda del usuario
+		filtros.TiendaID = userTiendaID
+	}
+	// admin puede listar todas las tiendas (sin restricción)
 
 	inventarios, total, err := s.repo.ListInventarios(ctx, filtros)
 	if err != nil {
@@ -313,15 +346,31 @@ func (s *ServiceImpl) Listar(ctx context.Context, filtros *FiltrosInventario, us
 	}, nil
 }
 
-func (s *ServiceImpl) Buscar(ctx context.Context, inventarioID int64, userID int64, role string) (*InventarioResp, error) {
-	// TODO: Verificar autorización
+func (s *ServiceImpl) Buscar(ctx context.Context, inventarioID int64, userID int64, role string, userTiendaID *int64) (*InventarioResp, error) {
 	inv, err := s.repo.GetInventarioDetalle(ctx, inventarioID)
 	if err != nil {
+		s.logger.ErrorContext(ctx, "inventario.buscar: error obteniendo",
+			"inventario_id", inventarioID,
+			"error", err.Error())
 		return nil, err
 	}
 
 	if inv == nil {
+		s.logger.WarnContext(ctx, "inventario.buscar: not found",
+			"inventario_id", inventarioID)
 		return nil, NewError("not_found", "inventario no encontrado")
+	}
+
+	// RBAC: Validar autorización por tienda (RF-INV-04)
+	if role != "admin" {
+		if userTiendaID == nil || *userTiendaID != inv.TiendaID {
+			s.logger.WarnContext(ctx, "inventario.buscar: unauthorized tienda",
+				"user_id", userID,
+				"user_role", role,
+				"user_tienda_id", userTiendaID,
+				"inventario_tienda_id", inv.TiendaID)
+			return nil, NewError("tienda_no_autorizada", "No tienes permiso para ver inventarios de esta tienda")
+		}
 	}
 
 	return s.mapInventarioToResp(inv), nil
@@ -357,18 +406,38 @@ func (s *ServiceImpl) Modificar(ctx context.Context, inventarioID, itemID int64,
 	}, nil
 }
 
-func (s *ServiceImpl) Eliminar(ctx context.Context, inventarioID int64, userID int64, role string) error {
-	// TODO: Solo admin puede eliminar en_progreso
+func (s *ServiceImpl) Eliminar(ctx context.Context, inventarioID int64, userID int64, role string, userTiendaID *int64) error {
+	s.logger.InfoContext(ctx, "inventario.eliminar: iniciando",
+		"user_id", userID,
+		"user_role", role,
+		"inventario_id", inventarioID)
+
+	// RBAC: Solo admin puede eliminar (RF-INV-05.2)
+	if role != "admin" {
+		s.logger.WarnContext(ctx, "inventario.eliminar: unauthorized role",
+			"user_id", userID,
+			"user_role", role)
+		return NewError("sin_permiso", "Solo admins pueden eliminar conteos")
+	}
+
 	inv, err := s.repo.GetInventario(ctx, inventarioID)
 	if err != nil {
+		s.logger.ErrorContext(ctx, "inventario.eliminar: error obteniendo",
+			"inventario_id", inventarioID,
+			"error", err.Error())
 		return err
 	}
 
 	if inv == nil {
+		s.logger.WarnContext(ctx, "inventario.eliminar: not found",
+			"inventario_id", inventarioID)
 		return NewError("not_found", "inventario no encontrado")
 	}
 
 	if inv.Estado != EstadoEnProgreso {
+		s.logger.WarnContext(ctx, "inventario.eliminar: invalid estado",
+			"inventario_id", inventarioID,
+			"estado", inv.Estado)
 		return NewError("eliminacion_no_permitida", "solo se pueden eliminar conteos en progreso")
 	}
 
