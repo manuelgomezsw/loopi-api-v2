@@ -75,17 +75,29 @@ func mapErrorToStatus(errCode string) int {
 // GET /api/v1/inventarios/sugerencia
 func (h *Handler) GetSugerencia(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	h.logger.InfoContext(ctx, "inventario.sugerencia.get: iniciando")
+	claims := ctx.Value(auth.ContextKeyClaims).(*auth.Claims)
+	userID, _ := strconv.ParseInt(claims.Subject, 10, 64)
+
+	h.logger.InfoContext(ctx, "inventario.sugerencia.get: iniciando",
+		"user_id", userID,
+		"rol", claims.Rol,
+		"tienda_id", claims.TiendaID)
 
 	sugerencia, err := h.service.Sugerir(ctx)
 	if err != nil {
 		h.logger.ErrorContext(ctx, "inventario.sugerencia.get: error",
+			"user_id", userID,
+			"rol", claims.Rol,
+			"tienda_id", claims.TiendaID,
 			"error", err.Error())
 		h.respondError(w, http.StatusBadRequest, "error", err.Error())
 		return
 	}
 
 	h.logger.InfoContext(ctx, "inventario.sugerencia.get: success",
+		"user_id", userID,
+		"rol", claims.Rol,
+		"tienda_id", claims.TiendaID,
 		"tipo", sugerencia.Tipo,
 		"horario", sugerencia.Horario)
 	h.respondJSON(w, http.StatusOK, sugerencia)
@@ -133,12 +145,16 @@ func (h *Handler) PostInventario(w http.ResponseWriter, r *http.Request) {
 		svcErr, ok := err.(*Error)
 		if !ok {
 			h.logger.ErrorContext(ctx, "inventario.iniciar.post: error",
+				"user_id", userID,
+				"rol", claims.Rol,
 				"error", err.Error(),
 				"tienda_id", req.TiendaID)
 			h.respondError(w, http.StatusBadRequest, "error", err.Error())
 			return
 		}
 		h.logger.WarnContext(ctx, "inventario.iniciar.post: error",
+			"user_id", userID,
+			"rol", claims.Rol,
 			"error_code", svcErr.Code,
 			"error_message", svcErr.Message,
 			"tienda_id", req.TiendaID)
@@ -147,6 +163,8 @@ func (h *Handler) PostInventario(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.logger.InfoContext(ctx, "inventario.iniciar.post: success",
+		"user_id", userID,
+		"rol", claims.Rol,
 		"inventario_id", resp.ID,
 		"tienda_id", resp.TiendaID,
 		"items_count", len(resp.Items))
@@ -201,12 +219,16 @@ func (h *Handler) GetInventario(w http.ResponseWriter, r *http.Request) {
 		svcErr, ok := err.(*Error)
 		if !ok {
 			h.logger.ErrorContext(ctx, "inventario.detalle.get: error",
+				"user_id", userID,
+				"rol", claims.Rol,
 				"inventario_id", inventarioID,
 				"error", err.Error())
 			h.respondError(w, http.StatusBadRequest, "error", err.Error())
 			return
 		}
 		h.logger.WarnContext(ctx, "inventario.detalle.get: error",
+			"user_id", userID,
+			"rol", claims.Rol,
 			"error_code", svcErr.Code,
 			"inventario_id", inventarioID)
 		h.respondError(w, mapErrorToStatus(svcErr.Code), svcErr.Code, svcErr.Message)
@@ -214,6 +236,8 @@ func (h *Handler) GetInventario(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.logger.InfoContext(ctx, "inventario.detalle.get: success",
+		"user_id", userID,
+		"rol", claims.Rol,
 		"inventario_id", resp.ID,
 		"estado", resp.Estado)
 	h.respondJSON(w, http.StatusOK, resp)
@@ -292,6 +316,8 @@ func (h *Handler) PatchItemValor(w http.ResponseWriter, r *http.Request) {
 		svcErr, ok := err.(*Error)
 		if !ok {
 			h.logger.ErrorContext(ctx, "inventario.registrar.patch: error",
+				"user_id", userID,
+				"rol", claims.Rol,
 				"inventario_id", inventarioID,
 				"item_id", itemID,
 				"error", err.Error())
@@ -299,6 +325,8 @@ func (h *Handler) PatchItemValor(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.logger.WarnContext(ctx, "inventario.registrar.patch: error",
+			"user_id", userID,
+			"rol", claims.Rol,
 			"error_code", svcErr.Code,
 			"inventario_id", inventarioID,
 			"item_id", itemID)
@@ -307,6 +335,8 @@ func (h *Handler) PatchItemValor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.logger.InfoContext(ctx, "inventario.registrar.patch: success",
+		"user_id", userID,
+		"rol", claims.Rol,
 		"inventario_id", inventarioID,
 		"item_id", itemID,
 		"diferencia", resp.Diferencia)
@@ -360,12 +390,16 @@ func (h *Handler) PostConfirmar(w http.ResponseWriter, r *http.Request) {
 		svcErr, ok := err.(*Error)
 		if !ok {
 			h.logger.ErrorContext(ctx, "inventario.confirmar.post: error",
+				"user_id", userID,
+				"rol", claims.Rol,
 				"inventario_id", inventarioID,
 				"error", err.Error())
 			h.respondError(w, http.StatusBadRequest, "error", err.Error())
 			return
 		}
 		h.logger.WarnContext(ctx, "inventario.confirmar.post: error",
+			"user_id", userID,
+			"rol", claims.Rol,
 			"error_code", svcErr.Code,
 			"inventario_id", inventarioID)
 		h.respondError(w, mapErrorToStatus(svcErr.Code), svcErr.Code, svcErr.Message)
@@ -373,6 +407,8 @@ func (h *Handler) PostConfirmar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.logger.InfoContext(ctx, "inventario.confirmar.post: success",
+		"user_id", userID,
+		"rol", claims.Rol,
 		"inventario_id", resp.ID,
 		"estado", resp.Estado,
 		"completado_en", resp.CompletadoEn)
@@ -427,12 +463,16 @@ func (h *Handler) DeleteInventario(w http.ResponseWriter, r *http.Request) {
 		svcErr, ok := err.(*Error)
 		if !ok {
 			h.logger.ErrorContext(ctx, "inventario.eliminar.delete: error",
+				"user_id", userID,
+				"rol", claims.Rol,
 				"inventario_id", inventarioID,
 				"error", err.Error())
 			h.respondError(w, http.StatusBadRequest, "error", err.Error())
 			return
 		}
 		h.logger.WarnContext(ctx, "inventario.eliminar.delete: error",
+			"user_id", userID,
+			"rol", claims.Rol,
 			"error_code", svcErr.Code,
 			"inventario_id", inventarioID)
 		h.respondError(w, mapErrorToStatus(svcErr.Code), svcErr.Code, svcErr.Message)
@@ -440,6 +480,8 @@ func (h *Handler) DeleteInventario(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.logger.InfoContext(ctx, "inventario.eliminar.delete: success",
+		"user_id", userID,
+		"rol", claims.Rol,
 		"inventario_id", inventarioID)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -482,17 +524,23 @@ func (h *Handler) GetHistorial(w http.ResponseWriter, r *http.Request) {
 		svcErr, ok := err.(*Error)
 		if !ok {
 			h.logger.ErrorContext(ctx, "inventario.historial.get: error",
+				"user_id", userID,
+				"rol", claims.Rol,
 				"error", err.Error())
 			h.respondError(w, http.StatusBadRequest, "error", err.Error())
 			return
 		}
 		h.logger.WarnContext(ctx, "inventario.historial.get: error",
+			"user_id", userID,
+			"rol", claims.Rol,
 			"error_code", svcErr.Code)
 		h.respondError(w, mapErrorToStatus(svcErr.Code), svcErr.Code, svcErr.Message)
 		return
 	}
 
 	h.logger.InfoContext(ctx, "inventario.historial.get: success",
+		"user_id", userID,
+		"rol", claims.Rol,
 		"total", resp.Total,
 		"pagina", filtros.Pagina,
 		"items_returned", len(resp.Inventarios))
