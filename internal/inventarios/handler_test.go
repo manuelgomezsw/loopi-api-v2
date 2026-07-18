@@ -105,8 +105,8 @@ func contextWithClaims() context.Context {
 // Tests
 func TestGetSugerencia(t *testing.T) {
 	handler := NewHandler(NewMockService())
-	// GetSugerencia es público (no requiere autenticación)
 	req := httptest.NewRequest("GET", "/api/v1/inventarios/sugerencia", nil)
+	req = req.WithContext(contextWithClaims())
 	w := httptest.NewRecorder()
 
 	handler.GetSugerencia(w, req)
