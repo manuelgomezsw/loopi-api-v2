@@ -72,6 +72,7 @@ func mapErrorToStatus(errCode string) int {
 	}
 }
 
+
 // GetSugerencia retorna la sugerencia de tipo/horario basada en la hora actual
 // GET /api/v1/inventarios/sugerencia
 func (h *Handler) GetSugerencia(w http.ResponseWriter, r *http.Request) {

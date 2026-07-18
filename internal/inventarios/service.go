@@ -377,6 +377,16 @@ func (s *ServiceImpl) Buscar(ctx context.Context, inventarioID int64, userID int
 		}
 	}
 
+	// Validar que user es el responsable (solo no-admin necesita validar)
+	if role != "admin" && userID != inv.ResponsableID {
+		s.logger.WarnContext(ctx, "inventario.buscar: unauthorized responsable",
+			"user_id", userID,
+			"user_role", role,
+			"inventario_responsable_id", inv.ResponsableID,
+			"inventario_id", inventarioID)
+		return nil, NewError("conteo_bloqueado", "Solo el responsable del conteo puede acceder a él")
+	}
+
 	return s.mapInventarioToResp(inv), nil
 }
 
