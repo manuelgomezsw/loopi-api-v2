@@ -2,6 +2,7 @@ package inventarios
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 )
@@ -103,7 +104,36 @@ func (s *ServiceImpl) Iniciar(ctx context.Context, req *CreateInventarioReq, use
 		return nil, err
 	}
 
-	// Crear inventario
+	// T156: Paso 1 — Query items ANTES de crear inventario
+	// Query: SELECT id FROM items WHERE tienda_id=? AND activo=1 AND frecuencia_inventario=?
+	itemIDs, err := s.repo.GetItemsActivosPorTipo(ctx, req.TiendaID, req.Tipo)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "inventario.iniciar: error obteniendo items",
+			"tienda_id", req.TiendaID,
+			"tipo", req.Tipo,
+			"error", err.Error())
+		return nil, NewError("error_interno", "Error al obtener items para contabilizar")
+	}
+
+	// Validar hay items para contar
+	if len(itemIDs) == 0 {
+		s.logger.WarnContext(ctx, "inventario.iniciar: sin items para tipo",
+			"tienda_id", req.TiendaID,
+			"tipo", req.Tipo)
+		return nil, NewError("sin_items_contabilizar", fmt.Sprintf("No hay items activos para contabilizar en esta tienda para el tipo %s", req.Tipo))
+	}
+
+	// T157: Paso 2 — Cruzar con stock_actual para obtener valor_sugerido
+	// Query: SELECT item_id, valor_snapshot FROM stock_actual WHERE tienda_id=? AND item_id IN (...)
+	stockSnapshot, err := s.repo.GetStockSnapshot(ctx, req.TiendaID, itemIDs)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "inventario.iniciar: error obteniendo snapshot",
+			"tienda_id", req.TiendaID,
+			"error", err.Error())
+		return nil, NewError("error_interno", "Error al obtener snapshot de stock")
+	}
+
+	// T158: Paso 3 — Crear inventario + detalles (AHORA, después de validaciones)
 	now := time.Now()
 	inv := &Inventario{
 		TiendaID:      req.TiendaID,
@@ -117,7 +147,7 @@ func (s *ServiceImpl) Iniciar(ctx context.Context, req *CreateInventarioReq, use
 		ActualizadoEn: now,
 	}
 
-	// Guardar en BD
+	// Crear inventario
 	createdInv, err := s.repo.CreateInventario(ctx, inv)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "inventario.iniciar: error creando",
@@ -126,7 +156,29 @@ func (s *ServiceImpl) Iniciar(ctx context.Context, req *CreateInventarioReq, use
 		return nil, err
 	}
 
-	// Obtener detalles con valores sugeridos
+	// Crear detalles con valor_sugerido mapeado desde stockSnapshot
+	detalles := make([]DetalleInventario, len(itemIDs))
+	for i, itemID := range itemIDs {
+		detalles[i] = DetalleInventario{
+			InventarioID:   createdInv.ID,
+			ItemID:         itemID,
+			ValorSugerido:  stockSnapshot[itemID],
+			ValorEsperado:  0,
+			CreadoEn:       now,
+			ActualizadoEn:  now,
+		}
+	}
+
+	err = s.repo.CreateDetalleInventario(ctx, detalles)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "inventario.iniciar: error creando detalles",
+			"inventario_id", createdInv.ID,
+			"items_count", len(detalles),
+			"error", err.Error())
+		return nil, err
+	}
+
+	// Obtener inventario completo con detalles creados
 	createdInv, err = s.repo.GetInventarioDetalle(ctx, createdInv.ID)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "inventario.iniciar: error obteniendo detalles",

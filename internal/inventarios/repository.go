@@ -57,6 +57,12 @@ type Repository interface {
 
 	// RecordMovimiento registra un movimiento en la auditoría
 	RecordMovimiento(ctx context.Context, movimiento *StockMovimiento) error
+
+	// GetItemsActivosPorTipo obtiene los items activos para un tipo de inventario
+	GetItemsActivosPorTipo(ctx context.Context, tiendaID int64, tipo Tipo) ([]int64, error)
+
+	// GetStockSnapshot obtiene el valor_snapshot de items desde stock_actual
+	GetStockSnapshot(ctx context.Context, tiendaID int64, itemIDs []int64) (map[int64]float64, error)
 }
 
 // RepositoryImpl implementa la interfaz Repository
@@ -567,4 +573,86 @@ func (r *RepositoryImpl) RecordMovimiento(ctx context.Context, movimiento *Stock
 	}
 
 	return nil
+}
+
+// GetItemsActivosPorTipo obtiene los IDs de items activos para un tipo de inventario
+// Query: SELECT id FROM items WHERE tienda_id=? AND activo=1 AND frecuencia_inventario=?
+func (r *RepositoryImpl) GetItemsActivosPorTipo(ctx context.Context, tiendaID int64, tipo Tipo) ([]int64, error) {
+	query := `
+		SELECT id FROM items
+		WHERE tienda_id = ? AND activo = 1 AND frecuencia_inventario = ?
+		ORDER BY id
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, tiendaID, string(tipo))
+	if err != nil {
+		return nil, fmt.Errorf("error obteniendo items activos: %w", err)
+	}
+	defer rows.Close()
+
+	var itemIDs []int64
+	for rows.Next() {
+		var itemID int64
+		if err := rows.Scan(&itemID); err != nil {
+			return nil, fmt.Errorf("error scanneando item: %w", err)
+		}
+		itemIDs = append(itemIDs, itemID)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterando items: %w", err)
+	}
+
+	return itemIDs, nil
+}
+
+// GetStockSnapshot obtiene el valor_snapshot de items desde stock_actual
+// Retorna map[item_id]valor_snapshot. Si item no existe en stock_actual, default es 0
+func (r *RepositoryImpl) GetStockSnapshot(ctx context.Context, tiendaID int64, itemIDs []int64) (map[int64]float64, error) {
+	if len(itemIDs) == 0 {
+		return make(map[int64]float64), nil
+	}
+
+	placeholders := strings.Repeat("?,", len(itemIDs))
+	placeholders = placeholders[:len(placeholders)-1] // Remover última coma
+
+	query := fmt.Sprintf(`
+		SELECT item_id, valor_snapshot FROM stock_actual
+		WHERE tienda_id = ? AND item_id IN (%s)
+	`, placeholders)
+
+	args := make([]interface{}, len(itemIDs)+1)
+	args[0] = tiendaID
+	for i, id := range itemIDs {
+		args[i+1] = id
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("error obteniendo stock snapshot: %w", err)
+	}
+	defer rows.Close()
+
+	stocks := make(map[int64]float64)
+
+	// Inicializar todos los items a 0
+	for _, itemID := range itemIDs {
+		stocks[itemID] = 0
+	}
+
+	// Sobrescribir con valores desde stock_actual
+	for rows.Next() {
+		var itemID int64
+		var valorSnapshot float64
+		if err := rows.Scan(&itemID, &valorSnapshot); err != nil {
+			return nil, fmt.Errorf("error scanneando stock: %w", err)
+		}
+		stocks[itemID] = valorSnapshot
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterando stocks: %w", err)
+	}
+
+	return stocks, nil
 }

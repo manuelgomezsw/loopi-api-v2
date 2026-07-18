@@ -239,3 +239,156 @@ func TestGetStockReferenciaByTipo_Success(t *testing.T) {
 	assert.Equal(t, 11.0, stock)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
+
+// TestGetItemsActivosPorTipo_Success verifica que se obtienen items activos para un tipo
+// T159: Unit test para GetItemsActivosPorTipo()
+func TestGetItemsActivosPorTipo_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewRepository(db)
+
+	// Mock query para items activos con frecuencia_inventario='diario'
+	rows := sqlmock.NewRows([]string{"id"}).
+		AddRow(int64(501)).
+		AddRow(int64(502)).
+		AddRow(int64(503))
+
+	mock.ExpectQuery("SELECT id FROM items WHERE tienda_id").
+		WithArgs(int64(1), "diario").
+		WillReturnRows(rows)
+
+	result, err := repo.GetItemsActivosPorTipo(context.Background(), 1, TipoDiario)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Len(t, result, 3)
+	assert.Equal(t, int64(501), result[0])
+	assert.Equal(t, int64(502), result[1])
+	assert.Equal(t, int64(503), result[2])
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestGetItemsActivosPorTipo_EmptyList verifica que retorna lista vacía si no hay items
+// T159: Verifica que retorna lista vacía cuando no hay items para tipo
+func TestGetItemsActivosPorTipo_EmptyList(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewRepository(db)
+
+	// Mock query que retorna cero rows
+	rows := sqlmock.NewRows([]string{"id"})
+
+	mock.ExpectQuery("SELECT id FROM items WHERE tienda_id").
+		WithArgs(int64(1), "semanal").
+		WillReturnRows(rows)
+
+	result, err := repo.GetItemsActivosPorTipo(context.Background(), 1, TipoSemanal)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Len(t, result, 0)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestGetItemsActivosPorTipo_ExcludesInactive verifica que excluye items inactivos
+// T159: Verifica que solo retorna items con activo=1
+func TestGetItemsActivosPorTipo_ExcludesInactive(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewRepository(db)
+
+	// Mock query - la cláusula WHERE activo=1 está en la query, así que no hay inactivos aquí
+	rows := sqlmock.NewRows([]string{"id"}).
+		AddRow(int64(501))
+
+	mock.ExpectQuery("SELECT id FROM items WHERE tienda_id = \\? AND activo = 1 AND frecuencia_inventario = \\?").
+		WithArgs(int64(2), "diario").
+		WillReturnRows(rows)
+
+	result, err := repo.GetItemsActivosPorTipo(context.Background(), 2, TipoDiario)
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 1)
+	assert.Equal(t, int64(501), result[0])
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestGetStockSnapshot_Success verifica que obtiene valores desde stock_actual
+// T160: Unit test para GetStockSnapshot()
+func TestGetStockSnapshot_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewRepository(db)
+
+	// Mock query para stock_actual
+	rows := sqlmock.NewRows([]string{"item_id", "valor_snapshot"}).
+		AddRow(int64(501), 50.0).
+		AddRow(int64(502), 45.5)
+
+	mock.ExpectQuery("SELECT item_id, valor_snapshot FROM stock_actual WHERE tienda_id").
+		WithArgs(int64(1), int64(501), int64(502)).
+		WillReturnRows(rows)
+
+	itemIDs := []int64{501, 502}
+	result, err := repo.GetStockSnapshot(context.Background(), 1, itemIDs)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, 50.0, result[501])
+	assert.Equal(t, 45.5, result[502])
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestGetStockSnapshot_DefaultZero verifica que default es 0 para items no en stock_actual
+// T160: Verifica que default 0 si item no existe en stock_actual
+func TestGetStockSnapshot_DefaultZero(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewRepository(db)
+
+	// Mock: solo item 501 está en stock_actual, item 502 no
+	rows := sqlmock.NewRows([]string{"item_id", "valor_snapshot"}).
+		AddRow(int64(501), 50.0)
+
+	mock.ExpectQuery("SELECT item_id, valor_snapshot FROM stock_actual WHERE tienda_id").
+		WithArgs(int64(1), int64(501), int64(502)).
+		WillReturnRows(rows)
+
+	itemIDs := []int64{501, 502}
+	result, err := repo.GetStockSnapshot(context.Background(), 1, itemIDs)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, 50.0, result[501])
+	assert.Equal(t, 0.0, result[502]) // Default 0
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestGetStockSnapshot_EmptyList verifica que maneja lista vacía de items
+// T160: Verifica que retorna mapa vacío para lista vacía de items
+func TestGetStockSnapshot_EmptyList(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewRepository(db)
+
+	itemIDs := []int64{}
+	result, err := repo.GetStockSnapshot(context.Background(), 1, itemIDs)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Len(t, result, 0)
+	// No mock expectations needed for empty list - se retorna early
+	assert.NoError(t, mock.ExpectationsWereMet())
+}

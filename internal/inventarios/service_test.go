@@ -106,6 +106,28 @@ func (m *MockRepository) RecordMovimiento(ctx context.Context, movimiento *Stock
 	return nil
 }
 
+func (m *MockRepository) GetItemsActivosPorTipo(ctx context.Context, tiendaID int64, tipo Tipo) ([]int64, error) {
+	// Mock: retorna items de ejemplo para testing
+	if tipo == TipoDiario {
+		return []int64{501, 502, 503}, nil
+	}
+	return []int64{}, nil
+}
+
+func (m *MockRepository) GetStockSnapshot(ctx context.Context, tiendaID int64, itemIDs []int64) (map[int64]float64, error) {
+	// Mock: retorna stock snapshot de ejemplo
+	stocks := make(map[int64]float64)
+	for _, itemID := range itemIDs {
+		stocks[itemID] = 50.0 // Default mock value
+	}
+	return stocks, nil
+}
+
+func (m *MockRepository) GetEstadoInventarioActivo(ctx context.Context, tiendaID int64) (*InventarioResp, error) {
+	// Mock: no hay conteo activo
+	return nil, nil
+}
+
 // Tests
 func TestValidarTipo(t *testing.T) {
 	svc := NewService(NewMockRepository())
@@ -396,6 +418,103 @@ func TestEliminar(t *testing.T) {
 	}
 }
 
+// TestIniciar_CompleteFlow verifica el flujo completo de iniciar conteo (T161)
+// Integration test para Service.Iniciar() - flujo correcto:
+// 1. Query items ANTES de crear inventario
+// 2. Validar hay items (sino 422)
+// 3. Crear inventario
+// 4. Cruzar con stock_actual
+// 5. Crear detalles con valor_sugerido
+func TestIniciar_CompleteFlow(t *testing.T) {
+	mockRepo := NewMockRepository()
+	svc := NewService(mockRepo)
+	ctx := context.Background()
+
+	req := &CreateInventarioReq{
+		TiendaID: 1,
+		Tipo:     TipoDiario,
+		Horario:  ptrHorario(HorarioApertura),
+	}
+
+	resp, err := svc.Iniciar(ctx, req, 123, "lider_tienda", ptrInt64(1))
+
+	// Verificar: HTTP 201 con items
+	if err != nil {
+		t.Errorf("Iniciar() error = %v, want nil", err)
+	}
+	if resp == nil {
+		t.Errorf("Iniciar() retornó nil")
+	}
+	if resp.ID == 0 {
+		t.Errorf("Iniciar() retornó inventario sin ID")
+	}
+	if len(resp.Items) == 0 {
+		t.Errorf("Iniciar() retornó sin items, want > 0")
+	}
+	if resp.Items[0].ValorSugerido == 0 && len(resp.Items) > 0 {
+		// OK - puede ser 0, pero debe estar presente
+	}
+}
+
+// TestIniciar_NoItems verifica que retorna 422 si no hay items para tipo
+// T161: Verifica que POST /inventarios retorna 422 sin_items_contabilizar si no hay items
+func TestIniciar_NoItems(t *testing.T) {
+	// Crear mock repository que retorna 0 items
+	mockRepo := NewMockRepository()
+	// Override GetItemsActivosPorTipo para retornar lista vacía
+	originalGetItems := mockRepo.GetItemsActivosPorTipo
+	_ = originalGetItems
+
+	svc := NewService(mockRepo)
+	ctx := context.Background()
+
+	req := &CreateInventarioReq{
+		TiendaID: 1,
+		Tipo:     TipoSemanal, // TipoSemanal retorna items vacíos en el mock
+		Horario:  nil,
+	}
+
+	resp, err := svc.Iniciar(ctx, req, 123, "lider_tienda", ptrInt64(1))
+
+	// Verificar: HTTP 422 sin_items_contabilizar
+	if err == nil {
+		t.Errorf("Iniciar() error = nil, want error sin_items_contabilizar")
+	}
+	if resp != nil {
+		t.Errorf("Iniciar() retornó response, want nil")
+	}
+
+	// Verificar el código de error
+	if domainErr, ok := err.(*Error); ok {
+		if domainErr.Code != "sin_items_contabilizar" {
+			t.Errorf("Iniciar() error code = %s, want sin_items_contabilizar", domainErr.Code)
+		}
+	}
+}
+
+// TestIniciar_UnauthorizedTienda verifica que rechaza autorización de tienda
+func TestIniciar_UnauthorizedTienda(t *testing.T) {
+	mockRepo := NewMockRepository()
+	svc := NewService(mockRepo)
+	ctx := context.Background()
+
+	req := &CreateInventarioReq{
+		TiendaID: 2, // Usuario está en tienda 1
+		Tipo:     TipoDiario,
+		Horario:  ptrHorario(HorarioApertura),
+	}
+
+	resp, err := svc.Iniciar(ctx, req, 123, "lider_tienda", ptrInt64(1))
+
+	// Verificar: HTTP 403 tienda_no_autorizada
+	if err == nil {
+		t.Errorf("Iniciar() error = nil, want tienda_no_autorizada")
+	}
+	if resp != nil {
+		t.Errorf("Iniciar() retornó response, want nil")
+	}
+}
+
 // Helper functions
 func ptrHorario(h Horario) *Horario {
 	return &h
@@ -403,4 +522,8 @@ func ptrHorario(h Horario) *Horario {
 
 func ptrFloat64(f float64) *float64 {
 	return &f
+}
+
+func ptrInt64(i int64) *int64 {
+	return &i
 }

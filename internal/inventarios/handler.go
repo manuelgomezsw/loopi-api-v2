@@ -63,7 +63,7 @@ func mapErrorToStatus(errCode string) int {
 		return http.StatusConflict
 
 	// 422 Unprocessable Entity
-	case "items_sin_registrar", "estado_invalido", "eliminacion_no_permitida":
+	case "items_sin_registrar", "estado_invalido", "eliminacion_no_permitida", "sin_items_contabilizar":
 		return http.StatusUnprocessableEntity
 
 	// Default: 400 Bad Request
