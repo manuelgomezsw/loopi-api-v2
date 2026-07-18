@@ -73,32 +73,22 @@ func mapErrorToStatus(errCode string) int {
 }
 
 // GetSugerencia retorna la sugerencia de tipo/horario basada en la hora actual
-// GET /api/v1/inventarios/sugerencia
+// GET /api/v1/inventarios/sugerencia (público, no requiere autenticación)
+// La sugerencia depende SOLO de la hora del servidor, no del usuario
 func (h *Handler) GetSugerencia(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	claims := ctx.Value(auth.ContextKeyClaims).(*auth.Claims)
-	userID, _ := strconv.ParseInt(claims.Subject, 10, 64)
 
-	h.logger.InfoContext(ctx, "inventario.sugerencia.get: iniciando",
-		"user_id", userID,
-		"rol", claims.Rol,
-		"tienda_id", claims.TiendaID)
+	h.logger.InfoContext(ctx, "inventario.sugerencia.get: iniciando")
 
 	sugerencia, err := h.service.Sugerir(ctx)
 	if err != nil {
 		h.logger.ErrorContext(ctx, "inventario.sugerencia.get: error",
-			"user_id", userID,
-			"rol", claims.Rol,
-			"tienda_id", claims.TiendaID,
 			"error", err.Error())
 		h.respondError(w, http.StatusBadRequest, "error", err.Error())
 		return
 	}
 
 	h.logger.InfoContext(ctx, "inventario.sugerencia.get: success",
-		"user_id", userID,
-		"rol", claims.Rol,
-		"tienda_id", claims.TiendaID,
 		"tipo", sugerencia.Tipo,
 		"horario", sugerencia.Horario)
 	h.respondJSON(w, http.StatusOK, sugerencia)
