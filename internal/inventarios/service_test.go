@@ -91,6 +91,21 @@ func (m *MockRepository) SumarMermasPeriodo(ctx context.Context, tiendaID int64,
 	return 0, nil
 }
 
+func (m *MockRepository) CanRecordMovimiento(ctx context.Context, tiendaID int64) (bool, *int64, error) {
+	// Mock: siempre permite registrar movimientos
+	return true, nil, nil
+}
+
+func (m *MockRepository) SnapshotStockActual(ctx context.Context, inventario *Inventario, items []int64) error {
+	// Mock: no hace nada
+	return nil
+}
+
+func (m *MockRepository) RecordMovimiento(ctx context.Context, movimiento *StockMovimiento) error {
+	// Mock: no hace nada
+	return nil
+}
+
 // Tests
 func TestValidarTipo(t *testing.T) {
 	svc := NewService(NewMockRepository())
@@ -167,7 +182,7 @@ func TestIniciar(t *testing.T) {
 		Horario:  ptrHorario(HorarioApertura),
 	}
 
-	resp, err := svc.Iniciar(ctx, req, 123, 1)
+	resp, err := svc.Iniciar(ctx, req, 123, "admin", nil)
 	if err != nil {
 		t.Fatalf("Iniciar() error = %v", err)
 	}
@@ -279,7 +294,7 @@ func TestListar(t *testing.T) {
 		PorPagina: 50,
 	}
 
-	resp, err := svc.Listar(ctx, filtros, 123, 1)
+	resp, err := svc.Listar(ctx, filtros, 123, "admin", nil)
 	if err != nil {
 		t.Fatalf("Listar() error = %v", err)
 	}
@@ -306,7 +321,7 @@ func TestBuscar(t *testing.T) {
 	}
 	createdInv, _ := mockRepo.CreateInventario(ctx, inv)
 
-	resp, err := svc.Buscar(ctx, createdInv.ID, 123, 1)
+	resp, err := svc.Buscar(ctx, createdInv.ID, 123, "admin", nil)
 	if err != nil {
 		t.Errorf("Buscar() error = %v", err)
 	}
@@ -364,16 +379,16 @@ func TestEliminar(t *testing.T) {
 		name    string
 		invID   int64
 		userID  int64
-		roleID  int64
+		role    string
 		wantErr bool
 	}{
-		{"success", createdInv.ID, 123, 1, false},
-		{"not found", 999, 123, 1, true},
+		{"success", createdInv.ID, 123, "admin", false},
+		{"not found", 999, 123, "admin", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := svc.Eliminar(ctx, tt.invID, tt.userID, tt.roleID)
+			err := svc.Eliminar(ctx, tt.invID, tt.userID, tt.role, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Eliminar() error = %v, wantErr %v", err, tt.wantErr)
 			}

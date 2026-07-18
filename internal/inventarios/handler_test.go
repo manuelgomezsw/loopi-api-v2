@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/manuelgomezsw/loopi-api-v2/internal/auth"
 )
 
 type MockService struct {
@@ -19,7 +22,7 @@ func NewMockService() *MockService {
 	}
 }
 
-func (m *MockService) Iniciar(ctx context.Context, req *CreateInventarioReq, userID, roleID int64) (*InventarioResp, error) {
+func (m *MockService) Iniciar(ctx context.Context, req *CreateInventarioReq, userID int64, role string, userTiendaID *int64) (*InventarioResp, error) {
 	inv := &Inventario{
 		ID:            1,
 		TiendaID:      req.TiendaID,
@@ -54,11 +57,11 @@ func (m *MockService) Confirmar(ctx context.Context, inventarioID int64, userID 
 	return inv, nil
 }
 
-func (m *MockService) Listar(ctx context.Context, filtros *FiltrosInventario, userID int64, roleID int64) (*HistorialResp, error) {
+func (m *MockService) Listar(ctx context.Context, filtros *FiltrosInventario, userID int64, role string, userTiendaID *int64) (*HistorialResp, error) {
 	return &HistorialResp{Inventarios: []InventarioResp{}, Total: 0}, nil
 }
 
-func (m *MockService) Buscar(ctx context.Context, inventarioID int64, userID int64, roleID int64) (*InventarioResp, error) {
+func (m *MockService) Buscar(ctx context.Context, inventarioID int64, userID int64, role string, userTiendaID *int64) (*InventarioResp, error) {
 	return &InventarioResp{ID: inventarioID}, nil
 }
 
@@ -66,7 +69,7 @@ func (m *MockService) Modificar(ctx context.Context, inventarioID, itemID int64,
 	return &ItemDetailResp{}, nil
 }
 
-func (m *MockService) Eliminar(ctx context.Context, inventarioID int64, userID, roleID int64) error {
+func (m *MockService) Eliminar(ctx context.Context, inventarioID int64, userID int64, role string, userTiendaID *int64) error {
 	return nil
 }
 
@@ -82,10 +85,28 @@ func (m *MockService) ValidarHorario(horario *Horario, tipo Tipo) error {
 	return nil
 }
 
+func (m *MockService) GetEstadoInventarioActivo(ctx context.Context, tiendaID int64) (*InventarioResp, error) {
+	return nil, nil
+}
+
+// Helper function to create context with auth claims
+func contextWithClaims() context.Context {
+	tiendaID := 1
+	claims := &auth.Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject: "123",
+		},
+		Rol:      "admin",
+		TiendaID: &tiendaID,
+	}
+	return context.WithValue(context.Background(), auth.ContextKeyClaims, claims)
+}
+
 // Tests
 func TestGetSugerencia(t *testing.T) {
 	handler := NewHandler(NewMockService())
 	req := httptest.NewRequest("GET", "/api/v1/inventarios/sugerencia", nil)
+	req = req.WithContext(contextWithClaims())
 	w := httptest.NewRecorder()
 
 	handler.GetSugerencia(w, req)
@@ -113,6 +134,7 @@ func TestPostInventario(t *testing.T) {
 
 	body, _ := json.Marshal(reqBody)
 	req := httptest.NewRequest("POST", "/api/v1/inventarios", bytes.NewReader(body))
+	req = req.WithContext(contextWithClaims())
 	w := httptest.NewRecorder()
 
 	handler.PostInventario(w, req)
@@ -125,6 +147,7 @@ func TestPostInventario(t *testing.T) {
 func TestGetHistorial(t *testing.T) {
 	handler := NewHandler(NewMockService())
 	req := httptest.NewRequest("GET", "/api/v1/inventarios", nil)
+	req = req.WithContext(contextWithClaims())
 	w := httptest.NewRecorder()
 
 	handler.GetHistorial(w, req)
