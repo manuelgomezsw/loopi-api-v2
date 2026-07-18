@@ -575,7 +575,8 @@ func (r *RepositoryImpl) RecordMovimiento(ctx context.Context, movimiento *Stock
 	return nil
 }
 
-// GetItemsActivosPorTipo obtiene los IDs de items activos para un tipo de inventario
+// GetItemsActivosPorTipo obtiene los IDs de items activos para un tipo de inventario (per spec 009)
+// Items son multi-tenant (por tienda, per principio P-II de constitution)
 // Query: SELECT id FROM items WHERE tienda_id=? AND activo=1 AND frecuencia_inventario=?
 func (r *RepositoryImpl) GetItemsActivosPorTipo(ctx context.Context, tiendaID int64, tipo Tipo) ([]int64, error) {
 	query := `
