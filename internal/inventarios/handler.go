@@ -66,7 +66,11 @@ func mapErrorToStatus(errCode string) int {
 	case "items_sin_registrar", "estado_invalido", "eliminacion_no_permitida", "sin_items_contabilizar":
 		return http.StatusUnprocessableEntity
 
-	// Default: 400 Bad Request
+	// 500 Internal Server Error
+	case "error_servidor":
+		return http.StatusInternalServerError
+
+	// Default: 400 Bad Request (para validación y otros errores controlados)
 	default:
 		return http.StatusBadRequest
 	}

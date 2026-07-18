@@ -112,15 +112,15 @@ func (s *ServiceImpl) Iniciar(ctx context.Context, req *CreateInventarioReq, use
 			"tienda_id", req.TiendaID,
 			"tipo", req.Tipo,
 			"error", err.Error())
-		return nil, NewError("error_interno", "Error al obtener items para contabilizar")
+		return nil, NewError("error_servidor", "No se pudo obtener la lista de items para contar. Por favor intenta de nuevo o contacta al administrador si el problema persiste.")
 	}
 
-	// Validar hay items para contar
+	// Validar hay items para contar (RF-INV-02.3)
 	if len(itemIDs) == 0 {
 		s.logger.WarnContext(ctx, "inventario.iniciar: sin items para tipo",
 			"tienda_id", req.TiendaID,
 			"tipo", req.Tipo)
-		return nil, NewError("sin_items_contabilizar", fmt.Sprintf("No hay items activos para contabilizar en esta tienda para el tipo %s", req.Tipo))
+		return nil, NewError("sin_items_contabilizar", fmt.Sprintf("No hay items para contar de tipo %v. Verifica que haya items activos con esa frecuencia de inventario.", req.Tipo))
 	}
 
 	// T157: Paso 2 — Cruzar con stock_actual para obtener valor_sugerido
@@ -130,7 +130,7 @@ func (s *ServiceImpl) Iniciar(ctx context.Context, req *CreateInventarioReq, use
 		s.logger.ErrorContext(ctx, "inventario.iniciar: error obteniendo snapshot",
 			"tienda_id", req.TiendaID,
 			"error", err.Error())
-		return nil, NewError("error_interno", "Error al obtener snapshot de stock")
+		return nil, NewError("error_servidor", "No se pudo preparar los datos de stock. Por favor intenta de nuevo.")
 	}
 
 	// T158: Paso 3 — Crear inventario + detalles (AHORA, después de validaciones)
