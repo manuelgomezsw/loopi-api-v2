@@ -37,6 +37,10 @@ type Service interface {
 
 	// ValidarHorario valida que el horario sea válido o null según el tipo
 	ValidarHorario(horario *Horario, tipo Tipo) error
+
+	// GetEstadoInventarioActivo verifica si hay un conteo activo en una tienda (T143)
+	// Retorna el conteo activo si existe, nil si no hay
+	GetEstadoInventarioActivo(ctx context.Context, tiendaID int64) (*InventarioResp, error)
 }
 
 // FiltrosInventario contiene los criterios de filtrado para el historial
@@ -498,6 +502,47 @@ func (s *ServiceImpl) ValidarHorario(horario *Horario, tipo Tipo) error {
 		return NewError("horario_not_allowed", "horario no debe ser especificado para conteos semanales, mensuales o iniciales")
 	}
 	return nil
+}
+
+// GetEstadoInventarioActivo verifica si hay un conteo activo en una tienda (T143)
+// Retorna el conteo activo si existe, nil si no hay
+func (s *ServiceImpl) GetEstadoInventarioActivo(ctx context.Context, tiendaID int64) (*InventarioResp, error) {
+	s.logger.InfoContext(ctx, "inventario.estado: verificando",
+		"tienda_id", tiendaID)
+
+	// Usar CanRecordMovimiento para verificar si hay conteo activo
+	canRecord, activeCountID, err := s.repo.CanRecordMovimiento(ctx, tiendaID)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "inventario.estado: error verificando",
+			"tienda_id", tiendaID,
+			"error", err.Error())
+		return nil, err
+	}
+
+	// Si no hay conteo activo, retornar nil
+	if canRecord {
+		return nil, nil
+	}
+
+	// Obtener detalles del conteo activo
+	if activeCountID == nil {
+		return nil, nil
+	}
+
+	inv, err := s.repo.GetInventarioDetalle(ctx, *activeCountID)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "inventario.estado: error obteniendo detalles",
+			"tienda_id", tiendaID,
+			"inventario_id", activeCountID,
+			"error", err.Error())
+		return nil, err
+	}
+
+	s.logger.InfoContext(ctx, "inventario.estado: conteo activo encontrado",
+		"tienda_id", tiendaID,
+		"inventario_id", activeCountID)
+
+	return s.mapInventarioToResp(inv), nil
 }
 
 // Error es una estructura de error de negocio

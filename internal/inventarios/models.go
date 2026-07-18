@@ -162,3 +162,9 @@ type StockActual struct {
 	TomadoEn      time.Time `db:"tomado_en" json:"tomado_en"`
 	CreadoEn      time.Time `db:"creado_en" json:"creado_en"`
 }
+
+// EstadoInventarioResp es la respuesta para verificar si hay conteo activo
+type EstadoInventarioResp struct {
+	Activo      bool             `json:"activo"`
+	Inventario  *InventarioResp  `json:"inventario,omitempty"`
+}

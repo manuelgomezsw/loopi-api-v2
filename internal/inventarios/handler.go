@@ -625,6 +625,59 @@ func (h *Handler) respondJSON(w http.ResponseWriter, status int, data interface{
 	json.NewEncoder(w).Encode(data)
 }
 
+// GetEstadoInventarioActivo verifica si hay un conteo activo en una tienda
+// GET /api/v1/inventarios/estado?tienda_id=X
+// T143: Utilizado por otros módulos para bloquear movimientos durante conteo activo
+func (h *Handler) GetEstadoInventarioActivo(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := ctx.Value(auth.ContextKeyClaims).(*auth.Claims)
+	userID, _ := strconv.ParseInt(claims.Subject, 10, 64)
+
+	tiendaIDStr := r.URL.Query().Get("tienda_id")
+	if tiendaIDStr == "" {
+		h.logger.WarnContext(ctx, "inventario.estado.get: missing tienda_id parameter",
+			"user_id", userID)
+		h.respondError(w, http.StatusBadRequest, "validation_error", "tienda_id parameter es requerido")
+		return
+	}
+
+	tiendaID, err := strconv.ParseInt(tiendaIDStr, 10, 64)
+	if err != nil {
+		h.logger.WarnContext(ctx, "inventario.estado.get: invalid tienda_id",
+			"user_id", userID,
+			"tienda_id", tiendaIDStr)
+		h.respondError(w, http.StatusBadRequest, "validation_error", "tienda_id debe ser un número válido")
+		return
+	}
+
+	h.logger.InfoContext(ctx, "inventario.estado.get: iniciando",
+		"user_id", userID,
+		"tienda_id", tiendaID)
+
+	// Verificar si hay conteo activo
+	inv, err := h.service.GetEstadoInventarioActivo(ctx, tiendaID)
+	if err != nil {
+		h.logger.ErrorContext(ctx, "inventario.estado.get: error verificando",
+			"user_id", userID,
+			"tienda_id", tiendaID,
+			"error", err.Error())
+		h.respondError(w, http.StatusInternalServerError, "error", "Error verificando estado del inventario")
+		return
+	}
+
+	resp := EstadoInventarioResp{
+		Activo:     inv != nil,
+		Inventario: inv,
+	}
+
+	h.logger.InfoContext(ctx, "inventario.estado.get: success",
+		"user_id", userID,
+		"tienda_id", tiendaID,
+		"activo", resp.Activo)
+
+	h.respondJSON(w, http.StatusOK, resp)
+}
+
 func (h *Handler) respondError(w http.ResponseWriter, status int, errCode, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -648,6 +701,9 @@ func parseID(s string, id *int64) (bool, error) {
 func (h *Handler) RegisterRoutes(mux *http.ServeMux, middleware func(http.Handler) http.Handler) {
 	// GET /api/v1/inventarios/sugerencia — público (no requiere autenticación)
 	mux.HandleFunc("GET /api/v1/inventarios/sugerencia", h.GetSugerencia)
+
+	// GET /api/v1/inventarios/estado — requiere autenticación (T143: verificar conteo activo)
+	mux.Handle("GET /api/v1/inventarios/estado", middleware(http.HandlerFunc(h.GetEstadoInventarioActivo)))
 
 	// POST /api/v1/inventarios — requiere autenticación (T029)
 	mux.Handle("POST /api/v1/inventarios", middleware(http.HandlerFunc(h.PostInventario)))
