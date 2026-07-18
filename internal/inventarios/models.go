@@ -125,3 +125,40 @@ type ErrorResp struct {
 	Campo      *string       `json:"campo,omitempty"`
 	Detalles   interface{}   `json:"detalles,omitempty"`
 }
+
+// TipoMovimiento enum
+type TipoMovimiento string
+
+const (
+	TipoMovimientoCompra      TipoMovimiento = "compra"
+	TipoMovimientoMerma       TipoMovimiento = "merma"
+	TipoMovimientoVentaBatch  TipoMovimiento = "venta_batch"
+	TipoMovimientoAjusteConteo TipoMovimiento = "ajuste_conteo"
+)
+
+// StockMovimiento representa un movimiento de stock registrado en auditoría
+type StockMovimiento struct {
+	ID              int64          `db:"id" json:"id"`
+	TiendaID        int64          `db:"tienda_id" json:"tienda_id"`
+	ItemID          int64          `db:"item_id" json:"item_id"`
+	TipoMovimiento  TipoMovimiento `db:"tipo_movimiento" json:"tipo_movimiento"`
+	CantidadAntes   float64        `db:"cantidad_antes" json:"cantidad_antes"`
+	CantidadDespues float64        `db:"cantidad_despues" json:"cantidad_despues"`
+	CantidadDelta   float64        `db:"cantidad_delta" json:"cantidad_delta"`
+	ReferenciaID    *int64         `db:"referencia_id" json:"referencia_id"`
+	ReferenciaTipo  *string        `db:"referencia_tipo" json:"referencia_tipo"`
+	UsuarioID       int64          `db:"usuario_id" json:"usuario_id"`
+	Motivo          *string        `db:"motivo" json:"motivo"`
+	CreadoEn        time.Time      `db:"creado_en" json:"creado_en"`
+}
+
+// StockActual representa un snapshot del stock al iniciar conteo
+type StockActual struct {
+	ID            int64     `db:"id" json:"id"`
+	TiendaID      int64     `db:"tienda_id" json:"tienda_id"`
+	ItemID        int64     `db:"item_id" json:"item_id"`
+	InventarioID  int64     `db:"inventario_id" json:"inventario_id"`
+	ValorSnapshot float64   `db:"valor_snapshot" json:"valor_snapshot"`
+	TomadoEn      time.Time `db:"tomado_en" json:"tomado_en"`
+	CreadoEn      time.Time `db:"creado_en" json:"creado_en"`
+}

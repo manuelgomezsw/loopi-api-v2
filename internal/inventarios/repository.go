@@ -48,6 +48,15 @@ type Repository interface {
 
 	// SumarMermasPeriodo suma las mermas en un período
 	SumarMermasPeriodo(ctx context.Context, tiendaID int64, desde, hasta time.Time, itemID int64) (float64, error)
+
+	// CanRecordMovimiento verifica si se puede registrar un movimiento (no hay conteo activo)
+	CanRecordMovimiento(ctx context.Context, tiendaID int64) (bool, *int64, error)
+
+	// SnapshotStockActual toma snapshot del stock actual al iniciar conteo
+	SnapshotStockActual(ctx context.Context, inventario *Inventario, items []int64) error
+
+	// RecordMovimiento registra un movimiento en la auditoría
+	RecordMovimiento(ctx context.Context, movimiento *StockMovimiento) error
 }
 
 // RepositoryImpl implementa la interfaz Repository
@@ -462,4 +471,100 @@ func (r *RepositoryImpl) tableExists(ctx context.Context, tableName string) (boo
 
 	err := r.db.QueryRowContext(ctx, query, tableName).Scan(&exists)
 	return exists, err
+}
+
+// CanRecordMovimiento verifica si se puede registrar un movimiento
+// Retorna (canRecord, activeCountID, error)
+// canRecord=false si hay un conteo activo en la tienda
+func (r *RepositoryImpl) CanRecordMovimiento(ctx context.Context, tiendaID int64) (bool, *int64, error) {
+	query := `
+		SELECT id FROM inventarios
+		WHERE tienda_id = ? AND estado = 'en_progreso'
+		LIMIT 1
+	`
+
+	var activeCountID int64
+	err := r.db.QueryRowContext(ctx, query, tiendaID).Scan(&activeCountID)
+
+	if err == sql.ErrNoRows {
+		// No hay conteo activo - se puede registrar
+		return true, nil, nil
+	}
+	if err != nil {
+		return false, nil, fmt.Errorf("error verificando conteo activo: %w", err)
+	}
+
+	// Hay un conteo activo - no se puede registrar
+	return false, &activeCountID, nil
+}
+
+// SnapshotStockActual toma snapshot del stock actual al iniciar conteo
+func (r *RepositoryImpl) SnapshotStockActual(ctx context.Context, inventario *Inventario, items []int64) error {
+	if len(items) == 0 {
+		return nil
+	}
+
+	query := `
+		INSERT INTO stock_actual
+		(tienda_id, item_id, inventario_id, valor_snapshot, tomado_en, creado_en)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`
+
+	stmt, err := r.db.PrepareContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("error preparando snapshot statement: %w", err)
+	}
+	defer stmt.Close()
+
+	now := time.Now()
+	for _, itemID := range items {
+		_, err := stmt.ExecContext(ctx,
+			inventario.TiendaID,
+			itemID,
+			inventario.ID,
+			0, // valor_snapshot será actualizado por la lógica de service
+			now,
+			now,
+		)
+		if err != nil {
+			// Log warning - no bloquea por RD-04
+			fmt.Printf("WARNING: error tomando snapshot para item %d: %v\n", itemID, err)
+		}
+	}
+
+	return nil
+}
+
+// RecordMovimiento registra un movimiento en la tabla de auditoría
+func (r *RepositoryImpl) RecordMovimiento(ctx context.Context, movimiento *StockMovimiento) error {
+	query := `
+		INSERT INTO stock_movimientos
+		(tienda_id, item_id, tipo_movimiento, cantidad_antes, cantidad_despues,
+		 cantidad_delta, referencia_id, referencia_tipo, usuario_id, motivo, creado_en)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+
+	now := time.Now()
+	_, err := r.db.ExecContext(ctx, query,
+		movimiento.TiendaID,
+		movimiento.ItemID,
+		movimiento.TipoMovimiento,
+		movimiento.CantidadAntes,
+		movimiento.CantidadDespues,
+		movimiento.CantidadDelta,
+		movimiento.ReferenciaID,
+		movimiento.ReferenciaTipo,
+		movimiento.UsuarioID,
+		movimiento.Motivo,
+		now,
+	)
+
+	if err != nil {
+		// Log error pero no bloquea - auditoría es no-blocking per spec
+		fmt.Printf("ERROR registrando movimiento: tienda=%d, item=%d, tipo=%s, error=%v\n",
+			movimiento.TiendaID, movimiento.ItemID, movimiento.TipoMovimiento, err)
+		return nil // No retornar error para no bloquear la operación original
+	}
+
+	return nil
 }
