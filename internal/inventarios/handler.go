@@ -43,7 +43,7 @@ func mapErrorToStatus(errCode string) int {
 	// 204 No Content — handled in handlers explicitly
 
 	// 400 Bad Request
-	case "sin_tienda", "validation_error", "invalid_request", "tipo_inicial_no_permitido":
+	case "sin_tienda", "validation_error", "invalid_request", "tipo_inicial_no_permitido", "valor_invalido":
 		return http.StatusBadRequest
 
 	// 401 Unauthorized

@@ -254,6 +254,15 @@ func (s *ServiceImpl) RegistrarValor(ctx context.Context, inventarioID, itemID i
 		"item_id", itemID,
 		"valor_real", valorReal)
 
+	// Validar que valor_real >= 0 (RF-INV-02.1 BUG-020)
+	if valorReal < 0 {
+		s.logger.WarnContext(ctx, "inventario.registrar: valor negativo rechazado",
+			"inventario_id", inventarioID,
+			"item_id", itemID,
+			"valor_real", valorReal)
+		return nil, NewError("valor_invalido", "La cantidad no puede ser negativa. Ingrese un valor mayor o igual a 0.")
+	}
+
 	// Obtener inventario para verificar estado y responsable
 	inv, err := s.repo.GetInventario(ctx, inventarioID)
 	if err != nil {

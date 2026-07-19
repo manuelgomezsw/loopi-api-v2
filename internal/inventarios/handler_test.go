@@ -45,6 +45,10 @@ func (m *MockService) Iniciar(ctx context.Context, req *CreateInventarioReq, use
 }
 
 func (m *MockService) RegistrarValor(ctx context.Context, inventarioID, itemID int64, valorReal float64, userID int64) (*ItemDetailResp, error) {
+	// Validar valor_real >= 0 (BUG-020)
+	if valorReal < 0 {
+		return nil, NewError("valor_invalido", "La cantidad no puede ser negativa. Ingrese un valor mayor o igual a 0.")
+	}
 	return &ItemDetailResp{
 		ID:       1,
 		ItemID:   itemID,
@@ -182,6 +186,44 @@ func TestGetHistorial(t *testing.T) {
 
 	if resp.Inventarios == nil {
 		t.Errorf("GetHistorial() inventarios es nil")
+	}
+}
+
+// TestPatchItemValor_RejectedNegative verifica que valores negativos retornan 400 (T174 BUG-020)
+func TestPatchItemValor_RejectedNegative(t *testing.T) {
+	mockSvc := NewMockService()
+	handler := NewHandler(mockSvc)
+
+	reqBody := PatchItemValorReq{
+		ValorReal: -500.0, // Valor negativo - debe ser rechazado
+	}
+
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest("PATCH", "/api/v1/inventarios/1/items/1", bytes.NewReader(body))
+	req = req.WithContext(contextWithClaims())
+
+	// Simular ruta con path values
+	req.SetPathValue("id", "1")
+	req.SetPathValue("item_id", "1")
+
+	w := httptest.NewRecorder()
+
+	handler.PatchItemValor(w, req)
+
+	// Debe retornar 400 Bad Request
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("PatchItemValor(-500) status = %d, want 400", w.Code)
+	}
+
+	var errResp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&errResp); err == nil {
+		if errorCode, ok := errResp["error"].(string); ok {
+			if errorCode != "valor_invalido" {
+				t.Errorf("PatchItemValor(-500) error code = %s, want valor_invalido", errorCode)
+			}
+		} else {
+			t.Errorf("PatchItemValor(-500) error code missing or wrong type")
+		}
 	}
 }
 

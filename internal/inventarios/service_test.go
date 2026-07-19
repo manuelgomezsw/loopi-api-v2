@@ -478,8 +478,8 @@ func TestIniciar_CompleteFlow(t *testing.T) {
 	if len(resp.Items) == 0 {
 		t.Errorf("Iniciar() retornó sin items, want > 0")
 	}
-	if resp.Items[0].ValorSugerido == 0 && len(resp.Items) > 0 {
-		// OK - puede ser 0, pero debe estar presente
+	if len(resp.Items) > 0 && resp.Items[0].ValorEsperado >= 0 {
+		// OK - ValorEsperado debe estar presente (reemplaza a ValorSugerido per BUG-019)
 	}
 }
 
@@ -582,6 +582,97 @@ func TestRegistrarValor_DiferenciaCalculation(t *testing.T) {
 				t.Errorf("RegistrarValor() response is nil")
 			}
 		})
+	}
+}
+
+// TestRegistrarValor_RejectedNegative verifica que valores negativos son rechazados (T173 BUG-020)
+func TestRegistrarValor_RejectedNegative(t *testing.T) {
+	mockRepo := NewMockRepository()
+	svc := NewService(mockRepo)
+	ctx := context.Background()
+
+	inv := &Inventario{
+		TiendaID:      1,
+		Tipo:          TipoDiario,
+		Estado:        EstadoEnProgreso,
+		ResponsableID: 123,
+		Items: []DetalleInventario{
+			{ItemID: 1, ValorEsperado: 10, ID: 1},
+		},
+	}
+	createdInv, _ := mockRepo.CreateInventario(ctx, inv)
+
+	// Intentar registrar valor negativo
+	resp, err := svc.RegistrarValor(ctx, createdInv.ID, 1, -5.0, 123)
+
+	if err == nil {
+		t.Errorf("RegistrarValor(-5) error = nil, want error")
+	}
+	if resp != nil {
+		t.Errorf("RegistrarValor(-5) response = %v, want nil", resp)
+	}
+
+	svcErr, ok := err.(*Error)
+	if !ok {
+		t.Errorf("RegistrarValor(-5) error is not *Error, got %T", err)
+	} else if svcErr.Code != "valor_invalido" {
+		t.Errorf("RegistrarValor(-5) error code = %s, want valor_invalido", svcErr.Code)
+	}
+}
+
+// TestRegistrarValor_AcceptedZero verifica que valor cero es aceptado (T173 BUG-020)
+func TestRegistrarValor_AcceptedZero(t *testing.T) {
+	mockRepo := NewMockRepository()
+	svc := NewService(mockRepo)
+	ctx := context.Background()
+
+	inv := &Inventario{
+		TiendaID:      1,
+		Tipo:          TipoDiario,
+		Estado:        EstadoEnProgreso,
+		ResponsableID: 123,
+		Items: []DetalleInventario{
+			{ItemID: 1, ValorEsperado: 10, ID: 1},
+		},
+	}
+	createdInv, _ := mockRepo.CreateInventario(ctx, inv)
+
+	// Registrar valor cero (debe ser aceptado)
+	resp, err := svc.RegistrarValor(ctx, createdInv.ID, 1, 0.0, 123)
+
+	if err != nil {
+		t.Errorf("RegistrarValor(0) error = %v, want nil", err)
+	}
+	if resp == nil {
+		t.Errorf("RegistrarValor(0) response is nil, want not nil")
+	}
+}
+
+// TestRegistrarValor_AcceptedPositive verifica que valores positivos son aceptados (T173 BUG-020)
+func TestRegistrarValor_AcceptedPositive(t *testing.T) {
+	mockRepo := NewMockRepository()
+	svc := NewService(mockRepo)
+	ctx := context.Background()
+
+	inv := &Inventario{
+		TiendaID:      1,
+		Tipo:          TipoDiario,
+		Estado:        EstadoEnProgreso,
+		ResponsableID: 123,
+		Items: []DetalleInventario{
+			{ItemID: 1, ValorEsperado: 10, ID: 1},
+		},
+	}
+	createdInv, _ := mockRepo.CreateInventario(ctx, inv)
+
+	// Registrar valor positivo
+	resp, err := svc.RegistrarValor(ctx, createdInv.ID, 1, 15.5, 123)
+
+	if err != nil {
+		t.Errorf("RegistrarValor(15.5) error = %v, want nil", err)
+	}
+	if resp == nil {
+		t.Errorf("RegistrarValor(15.5) response is nil, want not nil")
 	}
 }
 
