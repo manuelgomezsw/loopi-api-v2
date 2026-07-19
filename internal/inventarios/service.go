@@ -104,9 +104,42 @@ func (s *ServiceImpl) Iniciar(ctx context.Context, req *CreateInventarioReq, use
 		return nil, err
 	}
 
+	// T165: Validación — Rechazar selección manual de "inicial" (BUG-017)
+	if req.Tipo == TipoInicial {
+		s.logger.WarnContext(ctx, "inventario.iniciar: usuario intentó seleccionar tipo inicial",
+			"user_id", userID,
+			"tienda_id", req.TiendaID)
+		return nil, NewError("tipo_inicial_no_permitido",
+			"El tipo 'inicial' no puede ser seleccionado manualmente. El sistema lo determina automáticamente en el primer conteo de la tienda.")
+	}
+
+	// T166: Determinación automática de tipo según historial (BUG-017)
+	// Consultar si existe inventario completado previo en la tienda
+	existeHistorial, err := s.repo.ExisteInventarioCompletado(ctx, req.TiendaID)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "inventario.iniciar: error consultando historial",
+			"tienda_id", req.TiendaID,
+			"error", err.Error())
+		// Continuar con existeHistorial = false (conservador)
+	}
+
+	// Determinar tipo_real según historial
+	tipoReal := req.Tipo
+	if !existeHistorial {
+		// Primer conteo: determinar como "inicial"
+		tipoReal = TipoInicial
+		s.logger.InfoContext(ctx, "inventario.iniciar: determinado como inicial (primer conteo)",
+			"tienda_id", req.TiendaID,
+			"tipo_solicitado", req.Tipo)
+	} else {
+		s.logger.InfoContext(ctx, "inventario.iniciar: determinado como tipo solicitado (historial existe)",
+			"tienda_id", req.TiendaID,
+			"tipo", tipoReal)
+	}
+
 	// T156: Paso 1 — Query items ANTES de crear inventario
 	// Query: SELECT id FROM items WHERE tienda_id=? AND activo=1 AND frecuencia_inventario=?
-	itemIDs, err := s.repo.GetItemsActivosPorTipo(ctx, req.TiendaID, req.Tipo)
+	itemIDs, err := s.repo.GetItemsActivosPorTipo(ctx, req.TiendaID, tipoReal)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "inventario.iniciar: error obteniendo items",
 			"tienda_id", req.TiendaID,
@@ -138,7 +171,7 @@ func (s *ServiceImpl) Iniciar(ctx context.Context, req *CreateInventarioReq, use
 	inv := &Inventario{
 		TiendaID:      req.TiendaID,
 		Fecha:         now,
-		Tipo:          req.Tipo,
+		Tipo:          tipoReal,
 		Horario:       req.Horario,
 		Estado:        EstadoEnProgreso,
 		ResponsableID: userID,

@@ -144,6 +144,16 @@ func (m *MockRepository) GetEstadoInventarioActivo(ctx context.Context, tiendaID
 	return nil, nil
 }
 
+func (m *MockRepository) ExisteInventarioCompletado(ctx context.Context, tiendaID int64) (bool, error) {
+	// Mock: verifica si existe algún inventario completado en la tienda
+	for _, inv := range m.inventarios {
+		if inv.TiendaID == tiendaID && inv.Estado == EstadoCompletado {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // Tests
 func TestValidarTipo(t *testing.T) {
 	svc := NewService(NewMockRepository())
@@ -634,6 +644,168 @@ func TestConfirmar_AllItemsRegistered(t *testing.T) {
 	}
 }
 
+// T167: Unit test validación tipo inicial en Service.Iniciar (BUG-017)
+func TestIniciar_TipoInicial_Rejection(t *testing.T) {
+	mock := NewMockRepository()
+	svc := NewService(mock)
+
+	tests := []struct {
+		name     string
+		tipo     Tipo
+		wantErr  bool
+		wantCode string
+	}{
+		{"T167-Caso1: rechaza tipo inicial", TipoInicial, true, "tipo_inicial_no_permitido"},
+		{"T167-Caso2: acepta tipo diario", TipoDiario, false, ""},
+		{"T167-Caso3: acepta tipo semanal", TipoSemanal, false, ""},
+		{"T167-Caso4: acepta tipo mensual", TipoMensual, false, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			req := &CreateInventarioReq{
+				TiendaID: 1,
+				Tipo:     tt.tipo,
+				Horario:  ptrHorario(HorarioApertura),
+			}
+
+			_, err := svc.Iniciar(ctx, req, 1, "admin", ptrInt64(1))
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Iniciar() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if tt.wantErr && err != nil {
+				errCode := err.(*ErrorDetail).Code
+				if errCode != tt.wantCode {
+					t.Errorf("Iniciar() error code = %v, want %v", errCode, tt.wantCode)
+				}
+			}
+		})
+	}
+}
+
+// T167: Unit test determinación automática de tipo (BUG-017)
+func TestIniciar_TipoDeterminacion_Automatica(t *testing.T) {
+	mock := NewMockRepository()
+	svc := NewService(mock)
+
+	ctx := context.Background()
+
+	// T167-Caso2: POST con tipo="diario" y NO existe historial → tipo_real = "inicial"
+	t.Run("T167-Caso2: primer conteo determina como inicial", func(t *testing.T) {
+		req := &CreateInventarioReq{
+			TiendaID: 1,
+			Tipo:     TipoDiario,
+			Horario:  ptrHorario(HorarioApertura),
+		}
+
+		resp, err := svc.Iniciar(ctx, req, 1, "admin", ptrInt64(1))
+
+		if err != nil {
+			t.Errorf("Iniciar() error = %v, wantErr false", err)
+		}
+
+		if resp.Tipo != TipoInicial {
+			t.Errorf("Iniciar() tipo = %v, want %v (determinado como inicial)", resp.Tipo, TipoInicial)
+		}
+	})
+
+	// T167-Caso3: POST con tipo="diario" y SÍ existe historial → tipo_real = "diario"
+	t.Run("T167-Caso3: conteo posterior mantiene tipo solicitado", func(t *testing.T) {
+		// Primero crear un inventario completado para simular historial
+		completedInv := &Inventario{
+			ID:        1,
+			TiendaID:  2,
+			Fecha:     time.Now(),
+			Tipo:      TipoDiario,
+			Estado:    EstadoCompletado,
+			ResponsableID: 1,
+			IniciadoEn:    time.Now(),
+			CompletadoEn:  ptrTime(time.Now()),
+			CreadoEn:      time.Now(),
+			ActualizadoEn: time.Now(),
+		}
+		mock.CreateInventario(ctx, completedInv)
+
+		req := &CreateInventarioReq{
+			TiendaID: 2,
+			Tipo:     TipoDiario,
+			Horario:  ptrHorario(HorarioApertura),
+		}
+
+		resp, err := svc.Iniciar(ctx, req, 1, "admin", ptrInt64(2))
+
+		if err != nil {
+			t.Errorf("Iniciar() error = %v, wantErr false", err)
+		}
+
+		if resp.Tipo != TipoDiario {
+			t.Errorf("Iniciar() tipo = %v, want %v (mantiene tipo solicitado)", resp.Tipo, TipoDiario)
+		}
+	})
+}
+
+// T168: Unit test ExisteInventarioCompletado (BUG-017)
+func TestExisteInventarioCompletado(t *testing.T) {
+	mock := NewMockRepository()
+	ctx := context.Background()
+
+	// T168-Caso1: Tienda con inventario completado → retorna true
+	t.Run("T168-Caso1: tienda con completado retorna true", func(t *testing.T) {
+		completedInv := &Inventario{
+			ID:        1,
+			TiendaID:  1,
+			Estado:    EstadoCompletado,
+		}
+		mock.CreateInventario(ctx, completedInv)
+
+		exists, err := mock.ExisteInventarioCompletado(ctx, 1)
+
+		if err != nil {
+			t.Errorf("ExisteInventarioCompletado() error = %v, wantErr false", err)
+		}
+
+		if !exists {
+			t.Errorf("ExisteInventarioCompletado() = %v, want true", exists)
+		}
+	})
+
+	// T168-Caso2: Tienda sin inventarios → retorna false
+	t.Run("T168-Caso2: tienda sin inventarios retorna false", func(t *testing.T) {
+		exists, err := mock.ExisteInventarioCompletado(ctx, 999)
+
+		if err != nil {
+			t.Errorf("ExisteInventarioCompletado() error = %v, wantErr false", err)
+		}
+
+		if exists {
+			t.Errorf("ExisteInventarioCompletado() = %v, want false", exists)
+		}
+	})
+
+	// T168-Caso3: Tienda solo con en_progreso (sin completado) → retorna false
+	t.Run("T168-Caso3: tienda con solo en_progreso retorna false", func(t *testing.T) {
+		inProgressInv := &Inventario{
+			ID:        2,
+			TiendaID:  2,
+			Estado:    EstadoEnProgreso,
+		}
+		mock.CreateInventario(ctx, inProgressInv)
+
+		exists, err := mock.ExisteInventarioCompletado(ctx, 2)
+
+		if err != nil {
+			t.Errorf("ExisteInventarioCompletado() error = %v, wantErr false", err)
+		}
+
+		if exists {
+			t.Errorf("ExisteInventarioCompletado() = %v, want false", exists)
+		}
+	})
+}
+
 // Helper functions
 func ptrHorario(h Horario) *Horario {
 	return &h
@@ -645,4 +817,8 @@ func ptrFloat64(f float64) *float64 {
 
 func ptrInt64(i int64) *int64 {
 	return &i
+}
+
+func ptrTime(t time.Time) *time.Time {
+	return &t
 }

@@ -52,6 +52,9 @@ type Repository interface {
 	// CanRecordMovimiento verifica si se puede registrar un movimiento (no hay conteo activo)
 	CanRecordMovimiento(ctx context.Context, tiendaID int64) (bool, *int64, error)
 
+	// ExisteInventarioCompletado verifica si existe al menos un inventario completado en una tienda
+	ExisteInventarioCompletado(ctx context.Context, tiendaID int64) (bool, error)
+
 	// SnapshotStockActual toma snapshot del stock actual al iniciar conteo
 	SnapshotStockActual(ctx context.Context, inventario *Inventario, items []int64) error
 
@@ -697,4 +700,24 @@ func (r *RepositoryImpl) GetStockSnapshot(ctx context.Context, tiendaID int64, i
 	}
 
 	return stocks, nil
+}
+
+// ExisteInventarioCompletado verifica si existe al menos un inventario completado en una tienda
+func (r *RepositoryImpl) ExisteInventarioCompletado(ctx context.Context, tiendaID int64) (bool, error) {
+	query := `
+		SELECT EXISTS(
+			SELECT 1 FROM inventarios
+			WHERE tienda_id = ? AND estado = 'completado'
+			LIMIT 1
+		)
+	`
+
+	var exists bool
+	err := r.db.QueryRowContext(ctx, query, tiendaID).Scan(&exists)
+	if err != nil {
+		// Log warning pero continuar (default false si error)
+		return false, nil
+	}
+
+	return exists, nil
 }
