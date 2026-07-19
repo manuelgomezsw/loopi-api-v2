@@ -159,8 +159,8 @@ func (r *RepositoryImpl) CreateInventario(ctx context.Context, inventario *Inven
 func (r *RepositoryImpl) CreateDetalleInventario(ctx context.Context, detalles []DetalleInventario) error {
 	query := `
 		INSERT INTO detalle_inventario
-		(inventario_id, item_id, inventario_referencia_id, valor_sugerido, valor_esperado, creado_en, actualizado_en)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		(inventario_id, item_id, inventario_referencia_id, valor_esperado, creado_en, actualizado_en)
+		VALUES (?, ?, ?, ?, ?, ?)
 	`
 
 	stmt, err := r.db.PrepareContext(ctx, query)
@@ -175,7 +175,6 @@ func (r *RepositoryImpl) CreateDetalleInventario(ctx context.Context, detalles [
 			detail.InventarioID,
 			detail.ItemID,
 			detail.InventarioReferenciaID,
-			detail.ValorSugerido,
 			detail.ValorEsperado,
 			now,
 			now,
@@ -220,7 +219,7 @@ func (r *RepositoryImpl) GetInventarioDetalle(ctx context.Context, id int64) (*I
 
 	query := `
 		SELECT di.id, di.inventario_id, di.item_id, di.inventario_referencia_id,
-		       di.valor_sugerido, di.valor_esperado, di.valor_real, di.diferencia,
+		       di.valor_esperado, di.valor_real, di.diferencia,
 		       di.creado_en, di.actualizado_en, i.nombre, i.unidad_medida_id
 		FROM detalle_inventario di
 		JOIN items i ON di.item_id = i.id
@@ -239,7 +238,7 @@ func (r *RepositoryImpl) GetInventarioDetalle(ctx context.Context, id int64) (*I
 		detail := DetalleInventario{}
 		err := rows.Scan(
 			&detail.ID, &detail.InventarioID, &detail.ItemID, &detail.InventarioReferenciaID,
-			&detail.ValorSugerido, &detail.ValorEsperado, &detail.ValorReal, &detail.Diferencia,
+			&detail.ValorEsperado, &detail.ValorReal, &detail.Diferencia,
 			&detail.CreadoEn, &detail.ActualizadoEn, &detail.Nombre, &detail.UnidadMedidaID,
 		)
 		if err != nil {
@@ -323,7 +322,7 @@ func (r *RepositoryImpl) UpdateDetalle(ctx context.Context, inventarioID, itemID
 
 	// Obtener el registro actualizado
 	selectQuery := `
-		SELECT id, inventario_id, item_id, valor_sugerido, valor_esperado,
+		SELECT id, inventario_id, item_id, valor_esperado,
 		       valor_real, diferencia, creado_en, actualizado_en
 		FROM detalle_inventario
 		WHERE inventario_id = ? AND item_id = ?
@@ -332,7 +331,7 @@ func (r *RepositoryImpl) UpdateDetalle(ctx context.Context, inventarioID, itemID
 	detail := &DetalleInventario{}
 	err = r.db.QueryRowContext(ctx, selectQuery, inventarioID, itemID).Scan(
 		&detail.ID, &detail.InventarioID, &detail.ItemID,
-		&detail.ValorSugerido, &detail.ValorEsperado,
+		&detail.ValorEsperado,
 		&detail.ValorReal, &detail.Diferencia,
 		&detail.CreadoEn, &detail.ActualizadoEn,
 	)

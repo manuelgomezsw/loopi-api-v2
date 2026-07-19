@@ -125,7 +125,7 @@ func (s *ServiceImpl) Iniciar(ctx context.Context, req *CreateInventarioReq, use
 		return nil, NewError("sin_items_contabilizar", fmt.Sprintf("No hay items para contar de tipo %v. Verifica que haya items activos con esa frecuencia de inventario.", req.Tipo))
 	}
 
-	// T157: Paso 2 — Cruzar con stock_actual para obtener valor_sugerido
+	// T157: Paso 2 — Cruzar con stock_actual para obtener valor_esperado
 	// Query: SELECT item_id, valor_snapshot FROM stock_actual WHERE tienda_id=? AND item_id IN (...)
 	stockSnapshot, err := s.repo.GetStockSnapshot(ctx, req.TiendaID, itemIDs)
 	if err != nil {
@@ -182,16 +182,15 @@ func (s *ServiceImpl) Iniciar(ctx context.Context, req *CreateInventarioReq, use
 		return nil, err
 	}
 
-	// Crear detalles con valor_sugerido mapeado desde stockSnapshot
+	// Crear detalles con valor_esperado (snapshot de stock) mapeado desde stockSnapshot
 	detalles := make([]DetalleInventario, len(itemIDs))
 	for i, itemID := range itemIDs {
 		detalles[i] = DetalleInventario{
-			InventarioID:   createdInv.ID,
-			ItemID:         itemID,
-			ValorSugerido:  stockSnapshot[itemID],
-			ValorEsperado:  0,
-			CreadoEn:       now,
-			ActualizadoEn:  now,
+			InventarioID:  createdInv.ID,
+			ItemID:        itemID,
+			ValorEsperado: stockSnapshot[itemID],
+			CreadoEn:      now,
+			ActualizadoEn: now,
 		}
 	}
 
@@ -229,7 +228,6 @@ func (s *ServiceImpl) mapInventarioToResp(inv *Inventario) *InventarioResp {
 			ItemID:         detail.ItemID,
 			Nombre:         detail.Nombre,
 			UnidadMedidaID: detail.UnidadMedidaID,
-			ValorSugerido:  detail.ValorSugerido,
 			ValorEsperado:  detail.ValorEsperado,
 			ValorReal:      detail.ValorReal,
 			Diferencia:     detail.Diferencia,
@@ -306,7 +304,6 @@ func (s *ServiceImpl) RegistrarValor(ctx context.Context, inventarioID, itemID i
 		ItemID:         detail.ItemID,
 		Nombre:         detail.Nombre,
 		UnidadMedidaID: detail.UnidadMedidaID,
-		ValorSugerido:  detail.ValorSugerido,
 		ValorEsperado:  detail.ValorEsperado,
 		ValorReal:      detail.ValorReal,
 		Diferencia:     detail.Diferencia,
@@ -497,7 +494,6 @@ func (s *ServiceImpl) Modificar(ctx context.Context, inventarioID, itemID int64,
 		ItemID:         detail.ItemID,
 		Nombre:         detail.Nombre,
 		UnidadMedidaID: detail.UnidadMedidaID,
-		ValorSugerido:  detail.ValorSugerido,
 		ValorEsperado:  detail.ValorEsperado,
 		ValorReal:      detail.ValorReal,
 		Diferencia:     detail.Diferencia,

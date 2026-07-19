@@ -58,7 +58,6 @@ type DetalleInventario struct {
 	Nombre                    string      `db:"nombre" json:"nombre"`
 	UnidadMedidaID            interface{} `db:"unidad_medida_id" json:"unidad_medida_id,omitempty"`
 	InventarioReferenciaID    *int64      `db:"inventario_referencia_id" json:"inventario_referencia_id"`
-	ValorSugerido             float64     `db:"valor_sugerido" json:"valor_sugerido"`
 	ValorEsperado             float64     `db:"valor_esperado" json:"valor_esperado"`
 	ValorReal                 *float64    `db:"valor_real" json:"valor_real"`
 	Diferencia                *float64    `db:"diferencia" json:"diferencia"`
@@ -102,7 +101,6 @@ type ItemDetailResp struct {
 	ItemID                 int64    `json:"item_id"`
 	Nombre                 string   `json:"nombre"`
 	UnidadMedidaID         interface{} `json:"unidad_medida_id,omitempty"`
-	ValorSugerido          float64  `json:"valor_sugerido"`
 	ValorEsperado          float64  `json:"valor_esperado"`
 	ValorReal              *float64 `json:"valor_real"`
 	Diferencia             *float64 `json:"diferencia"`
