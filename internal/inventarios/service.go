@@ -159,14 +159,12 @@ func (s *ServiceImpl) Iniciar(ctx context.Context, req *CreateInventarioReq, use
 			"tipo", tipoReal)
 	}
 
-	// BUG-021-B: Revalidar horario DESPUÉS de determinar tipoReal
-	// Asegura que tipo=diario→inicial no retenga horario
-	if err := s.ValidarHorario(req.Horario, tipoReal); err != nil {
-		s.logger.WarnContext(ctx, "inventario.iniciar: horario inválido para tipoReal",
-			"tipo_real", tipoReal,
-			"horario", req.Horario,
-			"error", err.Error())
-		return nil, err
+	// BUG-021-B: cuando tipoReal se determina como 'inicial', el horario solicitado
+	// (requerido para tipo=diario, ver RF-INV-01.2) ya no aplica — RF-INV-01.6 establece
+	// que 'inicial' no usa horario. Se anula en vez de rechazar la solicitud completa,
+	// para no bloquear el primer conteo de una tienda cuando el usuario eligió diario.
+	if tipoReal == TipoInicial {
+		req.Horario = nil
 	}
 
 	// T158: Paso 3 — Crear inventario + detalles (AHORA, después de validaciones)
@@ -565,7 +563,7 @@ func (s *ServiceImpl) Sugerir(ctx context.Context) (*SugerenciaResp, error) {
 	// 06:00-10:59 → diario/apertura
 	// 11:00-14:59 → diario/mediodía
 	// 15:00-23:59 → diario/cierre
-	var tipo Tipo = TipoDiario
+	var tipo = TipoDiario
 	var horario Horario
 
 	if hour >= 6 && hour < 11 {
