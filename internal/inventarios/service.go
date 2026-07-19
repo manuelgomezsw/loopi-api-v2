@@ -104,42 +104,11 @@ func (s *ServiceImpl) Iniciar(ctx context.Context, req *CreateInventarioReq, use
 		return nil, err
 	}
 
-	// T165: Validación — Rechazar selección manual de "inicial" (BUG-017)
-	if req.Tipo == TipoInicial {
-		s.logger.WarnContext(ctx, "inventario.iniciar: usuario intentó seleccionar tipo inicial",
-			"user_id", userID,
-			"tienda_id", req.TiendaID)
-		return nil, NewError("tipo_inicial_no_permitido",
-			"El tipo 'inicial' no puede ser seleccionado manualmente. El sistema lo determina automáticamente en el primer conteo de la tienda.")
-	}
-
-	// T166: Determinación automática de tipo según historial (BUG-017)
-	// Consultar si existe inventario completado previo en la tienda
-	existeHistorial, err := s.repo.ExisteInventarioCompletado(ctx, req.TiendaID)
-	if err != nil {
-		s.logger.ErrorContext(ctx, "inventario.iniciar: error consultando historial",
-			"tienda_id", req.TiendaID,
-			"error", err.Error())
-		// Continuar con existeHistorial = false (conservador)
-	}
-
-	// Determinar tipo_real según historial
-	tipoReal := req.Tipo
-	if !existeHistorial {
-		// Primer conteo: determinar como "inicial"
-		tipoReal = TipoInicial
-		s.logger.InfoContext(ctx, "inventario.iniciar: determinado como inicial (primer conteo)",
-			"tienda_id", req.TiendaID,
-			"tipo_solicitado", req.Tipo)
-	} else {
-		s.logger.InfoContext(ctx, "inventario.iniciar: determinado como tipo solicitado (historial existe)",
-			"tienda_id", req.TiendaID,
-			"tipo", tipoReal)
-	}
-
 	// T156: Paso 1 — Query items ANTES de crear inventario
 	// Query: SELECT id FROM items WHERE tienda_id=? AND activo=1 AND frecuencia_inventario=?
-	itemIDs, err := s.repo.GetItemsActivosPorTipo(ctx, req.TiendaID, tipoReal)
+	// NOTA: Usar req.Tipo (solicitado) para buscar items, NO tipoReal (determinado)
+	// porque frecuencia_inventario del item se basa en lo solicitado, no en lo determinado
+	itemIDs, err := s.repo.GetItemsActivosPorTipo(ctx, req.TiendaID, req.Tipo)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "inventario.iniciar: error obteniendo items",
 			"tienda_id", req.TiendaID,
@@ -164,6 +133,30 @@ func (s *ServiceImpl) Iniciar(ctx context.Context, req *CreateInventarioReq, use
 			"tienda_id", req.TiendaID,
 			"error", err.Error())
 		return nil, NewError("error_servidor", "No se pudo preparar los datos de stock. Por favor intenta de nuevo.")
+	}
+
+	// T166: Determinación automática de tipo según historial (BUG-017)
+	// Consultar si existe inventario completado previo en la tienda
+	existeHistorial, err := s.repo.ExisteInventarioCompletado(ctx, req.TiendaID)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "inventario.iniciar: error consultando historial",
+			"tienda_id", req.TiendaID,
+			"error", err.Error())
+		// Continuar con existeHistorial = false (conservador)
+	}
+
+	// Determinar tipo_real según historial
+	tipoReal := req.Tipo
+	if !existeHistorial {
+		// Primer conteo: determinar como "inicial"
+		tipoReal = TipoInicial
+		s.logger.InfoContext(ctx, "inventario.iniciar: determinado como inicial (primer conteo)",
+			"tienda_id", req.TiendaID,
+			"tipo_solicitado", req.Tipo)
+	} else {
+		s.logger.InfoContext(ctx, "inventario.iniciar: determinado como tipo solicitado (historial existe)",
+			"tienda_id", req.TiendaID,
+			"tipo", tipoReal)
 	}
 
 	// T158: Paso 3 — Crear inventario + detalles (AHORA, después de validaciones)
@@ -578,11 +571,17 @@ func (s *ServiceImpl) Sugerir(ctx context.Context) (*SugerenciaResp, error) {
 }
 
 func (s *ServiceImpl) ValidarTipo(tipo Tipo) error {
+	// BUG-017: Rechazar selección manual de "inicial" (determinación automática)
+	if tipo == TipoInicial {
+		return NewError("tipo_inicial_no_permitido",
+			"El tipo 'inicial' no puede ser seleccionado manualmente. El sistema lo determina automáticamente en el primer conteo de la tienda.")
+	}
+
 	switch tipo {
-	case TipoDiario, TipoSemanal, TipoMensual, TipoInicial:
+	case TipoDiario, TipoSemanal, TipoMensual:
 		return nil
 	default:
-		return NewError("invalid_tipo", "tipo debe ser diario, semanal, mensual o inicial")
+		return NewError("invalid_tipo", "tipo debe ser diario, semanal o mensual")
 	}
 }
 
