@@ -627,7 +627,7 @@ func (h *Handler) GetHistorial(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) respondJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	_ = json.NewEncoder(w).Encode(data)
 }
 
 // GetEstadoInventarioActivo verifica si hay un conteo activo en una tienda
@@ -690,7 +690,7 @@ func (h *Handler) respondError(w http.ResponseWriter, status int, errCode, messa
 func (h *Handler) respondErrorWithDetails(w http.ResponseWriter, status int, errCode, message string, details interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(ErrorResp{
+	_ = json.NewEncoder(w).Encode(ErrorResp{
 		Error:    errCode,
 		Mensaje:  message,
 		Detalles: details,

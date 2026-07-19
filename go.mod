@@ -2,6 +2,8 @@ module github.com/manuelgomezsw/loopi-api-v2
 
 go 1.25.0
 
+toolchain go1.26.5
+
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/XSAM/otelsql v0.42.0

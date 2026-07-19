@@ -218,7 +218,7 @@ func (r *mysqlEmpleadoRepository) ListarEmpleados(ctx context.Context, p ListarE
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var empleados []Empleado
 	for rows.Next() {

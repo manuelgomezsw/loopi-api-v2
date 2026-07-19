@@ -66,17 +66,5 @@ type errorResponse struct {
 
 // toResponse convierte una Tienda en TiendaResponse.
 func toResponse(t Tienda) TiendaResponse {
-	return TiendaResponse{
-		ID:             t.ID,
-		Codigo:         t.Codigo,
-		Nombre:         t.Nombre,
-		Direccion:      t.Direccion,
-		Ciudad:         t.Ciudad,
-		Telefono:       t.Telefono,
-		Activo:         t.Activo,
-		CreadoPor:      t.CreadoPor,
-		CreadoEn:       t.CreadoEn,
-		ActualizadoPor: t.ActualizadoPor,
-		ActualizadoEn:  t.ActualizadoEn,
-	}
+	return TiendaResponse(t)
 }

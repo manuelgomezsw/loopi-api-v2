@@ -47,10 +47,11 @@ func NewService(repo Repository) Service {
 
 func (s *service) ObtenerCatalogo(estado string) (*CatalogoResponse, error) {
 	var soloActivas *bool
-	if estado == "activo" {
+	switch estado {
+	case "activo":
 		b := true
 		soloActivas = &b
-	} else if estado == "inactivo" {
+	case "inactivo":
 		b := false
 		soloActivas = &b
 	}

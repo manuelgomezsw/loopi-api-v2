@@ -102,9 +102,10 @@ func (r *RepositoryImpl) CreateInventario(ctx context.Context, inventario *Inven
 		}
 		// Diferenciar mensaje según estado
 		msg := "Ya existe un conteo para esta tienda, tipo y horario en esta fecha"
-		if existingState == "en_progreso" {
+		switch existingState {
+		case "en_progreso":
 			msg = "Ya existe un conteo en progreso para esta tienda, tipo y horario. Usa la opción Reanudar si deseas continuar."
-		} else if existingState == "completado" {
+		case "completado":
 			msg = "Ya existe un conteo completado para esta tienda, tipo y horario en esta fecha. No se pueden crear conteos duplicados en el mismo día."
 		}
 		return nil, NewErrorWithDetails("conteo_duplicado", msg, details)
@@ -167,7 +168,7 @@ func (r *RepositoryImpl) CreateDetalleInventario(ctx context.Context, detalles [
 	if err != nil {
 		return fmt.Errorf("error preparando statement: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	now := time.Now()
 	for _, detail := range detalles {
@@ -231,7 +232,7 @@ func (r *RepositoryImpl) GetInventarioDetalle(ctx context.Context, id int64) (*I
 	if err != nil {
 		return nil, fmt.Errorf("error obteniendo detalles: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	inv.Items = []DetalleInventario{}
 	for rows.Next() {
@@ -289,7 +290,7 @@ func (r *RepositoryImpl) ListInventarios(ctx context.Context, filtros *FiltrosIn
 	if err != nil {
 		return nil, 0, fmt.Errorf("error listando inventarios: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	inventarios := []*Inventario{}
 	for rows.Next() {
@@ -353,7 +354,7 @@ func (r *RepositoryImpl) ConfirmarInventario(ctx context.Context, id int64) (*In
 	if err != nil {
 		return nil, fmt.Errorf("error iniciando transacción: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	now := time.Now()
 	query := `
@@ -391,7 +392,7 @@ func (r *RepositoryImpl) DeleteInventario(ctx context.Context, id int64) error {
 	if err != nil {
 		return fmt.Errorf("error iniciando transacción: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Eliminar detalles
 	_, err = tx.ExecContext(ctx, "DELETE FROM detalle_inventario WHERE inventario_id = ?", id)
@@ -563,7 +564,7 @@ func (r *RepositoryImpl) SnapshotStockActual(ctx context.Context, inventario *In
 	if err != nil {
 		return fmt.Errorf("error preparando snapshot statement: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	now := time.Now()
 	for _, itemID := range items {
@@ -632,7 +633,7 @@ func (r *RepositoryImpl) GetItemsActivosPorTipo(ctx context.Context, tiendaID in
 	if err != nil {
 		return nil, fmt.Errorf("error obteniendo items activos: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var itemIDs []int64
 	for rows.Next() {
@@ -675,7 +676,7 @@ func (r *RepositoryImpl) GetStockSnapshot(ctx context.Context, tiendaID int64, i
 	if err != nil {
 		return nil, fmt.Errorf("error obteniendo stock snapshot: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	stocks := make(map[int64]float64)
 

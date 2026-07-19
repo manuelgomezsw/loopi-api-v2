@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -442,10 +441,10 @@ func mapServiceError(err error) (int, errorResponse) {
 
 // logRequest emite un log estructurado JSON a stdout (Constitución Principio VI).
 func logRequest(userID uint64, rol, operacion string, tiendaID uint64, statusHTTP int, duracion time.Duration) {
-	log.Println(fmt.Sprintf(
+	log.Printf(
 		`{"user_id":%d,"rol":"%s","operacion":"%s","tienda_id":%d,"status_http":%d,"duracion_ms":%d}`,
 		userID, rol, operacion, tiendaID, statusHTTP, duracion.Milliseconds(),
-	))
+	)
 }
 
 // recordMetrics registra duración y conteo en los histogramas OTel.

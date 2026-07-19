@@ -57,7 +57,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("error al abrir conexión a BD: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := db.Ping(); err != nil {
 		log.Fatalf("error al conectar a BD: %v", err)

@@ -15,7 +15,7 @@ import (
 func TestCreateInventario_Success(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := NewRepository(db)
 	now := time.Now()
@@ -63,7 +63,7 @@ func TestCreateInventario_Success(t *testing.T) {
 func TestCreateInventario_DuplicateConstraint(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := NewRepository(db)
 	now := time.Now()
@@ -94,7 +94,7 @@ func TestCreateInventario_DuplicateConstraint(t *testing.T) {
 func TestGetInventario_Success(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := NewRepository(db)
 	now := time.Now()
@@ -121,7 +121,7 @@ func TestGetInventario_Success(t *testing.T) {
 func TestGetInventarioDetalle_WithItems(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := NewRepository(db)
 	now := time.Now()
@@ -133,9 +133,9 @@ func TestGetInventarioDetalle_WithItems(t *testing.T) {
 	)
 
 	itemRows := sqlmock.NewRows(
-		[]string{"id", "inventario_id", "item_id", "inventario_referencia_id", "valor_sugerido", "valor_esperado", "valor_real", "diferencia", "creado_en", "actualizado_en", "nombre", "unidad_medida_id"},
+		[]string{"id", "inventario_id", "item_id", "inventario_referencia_id", "valor_esperado", "valor_real", "diferencia", "creado_en", "actualizado_en", "nombre", "unidad_medida_id"},
 	).AddRow(
-		1, 1, 100, nil, 10.0, 10.0, nil, nil, now, now, "Item A", 1,
+		1, 1, 100, nil, 10.0, nil, nil, now, now, "Item A", 1,
 	)
 
 	mock.ExpectQuery("SELECT .* FROM inventarios WHERE id").
@@ -159,7 +159,7 @@ func TestGetInventarioDetalle_WithItems(t *testing.T) {
 func TestUpdateDetalle_Success(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := NewRepository(db)
 	now := time.Now()
@@ -169,9 +169,9 @@ func TestUpdateDetalle_Success(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	rows := sqlmock.NewRows(
-		[]string{"id", "inventario_id", "item_id", "valor_sugerido", "valor_esperado", "valor_real", "diferencia", "creado_en", "actualizado_en"},
+		[]string{"id", "inventario_id", "item_id", "valor_esperado", "valor_real", "diferencia", "creado_en", "actualizado_en"},
 	).AddRow(
-		1, 1, 100, 10.0, 10.0, 12.5, 2.5, now, now,
+		1, 1, 100, 10.0, 12.5, 2.5, now, now,
 	)
 
 	mock.ExpectQuery("SELECT .* FROM detalle_inventario WHERE inventario_id").
@@ -191,7 +191,7 @@ func TestUpdateDetalle_Success(t *testing.T) {
 func TestListInventarios_WithFilters(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := NewRepository(db)
 	now := time.Now()
@@ -228,7 +228,7 @@ func TestListInventarios_WithFilters(t *testing.T) {
 func TestGetStockReferenciaByTipo_Success(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := NewRepository(db)
 
@@ -253,7 +253,7 @@ func TestGetStockReferenciaByTipo_Success(t *testing.T) {
 func TestGetItemsActivosPorTipo_Success(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := NewRepository(db)
 
@@ -283,7 +283,7 @@ func TestGetItemsActivosPorTipo_Success(t *testing.T) {
 func TestGetItemsActivosPorTipo_EmptyList(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := NewRepository(db)
 
@@ -308,7 +308,7 @@ func TestGetItemsActivosPorTipo_EmptyList(t *testing.T) {
 func TestGetItemsActivosPorTipo_ExcludesInactive(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := NewRepository(db)
 
@@ -333,7 +333,7 @@ func TestGetItemsActivosPorTipo_ExcludesInactive(t *testing.T) {
 func TestGetStockSnapshot_Success(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := NewRepository(db)
 
@@ -361,7 +361,7 @@ func TestGetStockSnapshot_Success(t *testing.T) {
 func TestGetStockSnapshot_DefaultZero(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := NewRepository(db)
 
@@ -388,7 +388,7 @@ func TestGetStockSnapshot_DefaultZero(t *testing.T) {
 func TestGetStockSnapshot_EmptyList(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := NewRepository(db)
 
@@ -410,7 +410,7 @@ func TestGetStockSnapshot_EmptyList(t *testing.T) {
 func TestListInventarios_Sorting(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := NewRepository(db)
 	now := time.Now()

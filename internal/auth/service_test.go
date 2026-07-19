@@ -59,7 +59,7 @@ func hashMin(t *testing.T, pass string) string {
 func claimsConExp(jti string, exp time.Time) *auth.Claims {
 	c := &auth.Claims{}
 	c.JTI = jti
-	c.RegisteredClaims.ExpiresAt = jwt.NewNumericDate(exp)
+	c.ExpiresAt = jwt.NewNumericDate(exp)
 	return c
 }
 

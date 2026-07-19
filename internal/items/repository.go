@@ -245,7 +245,7 @@ func (r *mysqlRepository) Listar(filtros *FiltrosListado) (*ListarItemsResponse,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var lista []ItemConNombres
 	for rows.Next() {
@@ -413,7 +413,7 @@ func (r *mysqlRepository) ListarCostosTienda(itemID uint64) ([]CostoPorTienda, e
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var resultado []CostoPorTienda
 	var actual *CostoPorTienda

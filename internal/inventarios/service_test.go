@@ -2,7 +2,6 @@ package inventarios
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 )
@@ -237,7 +236,8 @@ func TestIniciar(t *testing.T) {
 	}
 
 	if resp == nil {
-		t.Errorf("Iniciar() retornó nil")
+		t.Fatalf("Iniciar() retornó nil")
+		return
 	}
 
 	if resp.TiendaID != 1 {
@@ -349,7 +349,8 @@ func TestListar(t *testing.T) {
 	}
 
 	if resp == nil {
-		t.Errorf("Listar() retornó nil")
+		t.Fatalf("Listar() retornó nil")
+		return
 	}
 
 	if resp.Total != 0 {
@@ -376,7 +377,8 @@ func TestBuscar(t *testing.T) {
 	}
 
 	if resp == nil {
-		t.Errorf("Buscar() retornó nil")
+		t.Fatalf("Buscar() retornó nil")
+		return
 	}
 
 	if resp.ID != createdInv.ID {
@@ -470,7 +472,8 @@ func TestIniciar_CompleteFlow(t *testing.T) {
 		t.Errorf("Iniciar() error = %v, want nil", err)
 	}
 	if resp == nil {
-		t.Errorf("Iniciar() retornó nil")
+		t.Fatalf("Iniciar() retornó nil")
+		return
 	}
 	if resp.ID == 0 {
 		t.Errorf("Iniciar() retornó inventario sin ID")
@@ -478,8 +481,9 @@ func TestIniciar_CompleteFlow(t *testing.T) {
 	if len(resp.Items) == 0 {
 		t.Errorf("Iniciar() retornó sin items, want > 0")
 	}
-	if len(resp.Items) > 0 && resp.Items[0].ValorEsperado >= 0 {
-		// OK - ValorEsperado debe estar presente (reemplaza a ValorSugerido per BUG-019)
+	if len(resp.Items) > 0 && resp.Items[0].ValorEsperado < 0 {
+		// ValorEsperado debe estar presente y no-negativo (reemplaza a ValorSugerido per BUG-019)
+		t.Errorf("Iniciar() ValorEsperado = %v, want >= 0", resp.Items[0].ValorEsperado)
 	}
 }
 
@@ -722,14 +726,15 @@ func TestConfirmar_AllItemsRegistered(t *testing.T) {
 	detalles := []DetalleInventario{
 		{InventarioID: createdInv.ID, ItemID: 1, ValorEsperado: 10, ValorReal: ptrFloat64(10)},
 	}
-	mockRepo.CreateDetalleInventario(ctx, detalles)
+	_ = mockRepo.CreateDetalleInventario(ctx, detalles)
 
 	resp, err := svc.Confirmar(ctx, createdInv.ID, 123)
 	if err != nil {
 		t.Errorf("Confirmar() error = %v, want nil", err)
 	}
 	if resp == nil {
-		t.Errorf("Confirmar() returned nil")
+		t.Fatalf("Confirmar() returned nil")
+		return
 	}
 	if resp.Estado != EstadoCompletado {
 		t.Errorf("Confirmar() estado = %v, want %v", resp.Estado, EstadoCompletado)
@@ -815,7 +820,7 @@ func TestIniciar_TipoDeterminacion_Automatica(t *testing.T) {
 			CreadoEn:      time.Now(),
 			ActualizadoEn: time.Now(),
 		}
-		mock.CreateInventario(ctx, completedInv)
+		_, _ = mock.CreateInventario(ctx, completedInv)
 
 		req := &CreateInventarioReq{
 			TiendaID: 2,
@@ -847,7 +852,7 @@ func TestExisteInventarioCompletado(t *testing.T) {
 			TiendaID:  1,
 			Estado:    EstadoCompletado,
 		}
-		mock.CreateInventario(ctx, completedInv)
+		_, _ = mock.CreateInventario(ctx, completedInv)
 
 		exists, err := mock.ExisteInventarioCompletado(ctx, 1)
 
@@ -880,7 +885,7 @@ func TestExisteInventarioCompletado(t *testing.T) {
 			TiendaID:  2,
 			Estado:    EstadoEnProgreso,
 		}
-		mock.CreateInventario(ctx, inProgressInv)
+		_, _ = mock.CreateInventario(ctx, inProgressInv)
 
 		exists, err := mock.ExisteInventarioCompletado(ctx, 2)
 
@@ -911,6 +916,3 @@ func ptrTime(t time.Time) *time.Time {
 	return &t
 }
 
-func contains(s, substr string) bool {
-	return strings.Contains(s, substr)
-}
