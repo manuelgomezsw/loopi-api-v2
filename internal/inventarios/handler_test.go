@@ -116,7 +116,13 @@ func TestGetSugerencia(t *testing.T) {
 	}
 
 	var resp SugerenciaResp
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("GetSugerencia() decode error: %v", err)
+	}
+
+	if resp.Tipo == "" {
+		t.Errorf("GetSugerencia() tipo vacío")
+	}
 
 	if resp.Tipo != TipoDiario {
 		t.Errorf("GetSugerencia() tipo = %v, want %v", resp.Tipo, TipoDiario)
@@ -142,6 +148,19 @@ func TestPostInventario(t *testing.T) {
 	if w.Code != http.StatusCreated {
 		t.Errorf("PostInventario() status = %d, want 201", w.Code)
 	}
+
+	var resp InventarioResp
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("PostInventario() decode error: %v", err)
+	}
+
+	if resp.Estado != EstadoEnProgreso {
+		t.Errorf("PostInventario() estado = %v, want %v", resp.Estado, EstadoEnProgreso)
+	}
+
+	if resp.TiendaID != 1 {
+		t.Errorf("PostInventario() tienda_id = %d, want 1", resp.TiendaID)
+	}
 }
 
 func TestGetHistorial(t *testing.T) {
@@ -155,4 +174,14 @@ func TestGetHistorial(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("GetHistorial() status = %d, want 200", w.Code)
 	}
+
+	var resp HistorialResp
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("GetHistorial() decode error: %v", err)
+	}
+
+	if resp.Inventarios == nil {
+		t.Errorf("GetHistorial() inventarios es nil")
+	}
 }
+

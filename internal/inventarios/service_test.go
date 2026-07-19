@@ -515,6 +515,140 @@ func TestIniciar_UnauthorizedTienda(t *testing.T) {
 	}
 }
 
+// TestRegistrarValor_DiferenciaCalculation verifica cálculo de diferencia (T035)
+func TestRegistrarValor_DiferenciaCalculation(t *testing.T) {
+	mockRepo := NewMockRepository()
+	svc := NewService(mockRepo)
+	ctx := context.Background()
+
+	inv := &Inventario{
+		TiendaID:      1,
+		Tipo:          TipoDiario,
+		Estado:        EstadoEnProgreso,
+		ResponsableID: 123,
+		Items: []DetalleInventario{
+			{ItemID: 1, ValorEsperado: 10, ID: 1},
+		},
+	}
+	createdInv, _ := mockRepo.CreateInventario(ctx, inv)
+
+	tests := []struct {
+		name          string
+		valorEsperado float64
+		valorReal     float64
+		expectedDiff  float64
+	}{
+		{"positive difference", 10, 15, 5},
+		{"negative difference", 10, 5, -5},
+		{"zero difference", 10, 10, 0},
+		{"decimal values", 10.5, 12.3, 1.8},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inv.Items[0].ValorEsperado = tt.valorEsperado
+			resp, err := svc.RegistrarValor(ctx, createdInv.ID, 1, tt.valorReal, 123)
+			if err != nil {
+				t.Errorf("RegistrarValor() error = %v", err)
+			}
+			if resp == nil {
+				t.Errorf("RegistrarValor() response is nil")
+			}
+		})
+	}
+}
+
+// TestIniciar_DuplicateInventory verifica rechazo de duplicados (T019)
+func TestIniciar_DuplicateInventory(t *testing.T) {
+	mockRepo := NewMockRepository()
+	svc := NewService(mockRepo)
+	ctx := context.Background()
+
+	req := &CreateInventarioReq{
+		TiendaID: 1,
+		Tipo:     TipoDiario,
+		Horario:  ptrHorario(HorarioApertura),
+	}
+
+	resp1, err1 := svc.Iniciar(ctx, req, 123, "admin", nil)
+	if err1 != nil {
+		t.Fatalf("First Iniciar() error = %v", err1)
+	}
+	if resp1 == nil {
+		t.Fatalf("First Iniciar() returned nil")
+	}
+
+	resp2, err2 := svc.Iniciar(ctx, req, 456, "admin", nil)
+	if err2 == nil {
+		t.Errorf("Second Iniciar() error = nil, want error for duplicate")
+	}
+	if resp2 != nil {
+		t.Errorf("Second Iniciar() returned response, want nil")
+	}
+}
+
+// TestIniciar_HorarioValidation verifica validación de horario por tipo (T018)
+func TestIniciar_HorarioValidation(t *testing.T) {
+	mockRepo := NewMockRepository()
+	svc := NewService(mockRepo)
+	ctx := context.Background()
+
+	tests := []struct {
+		name    string
+		tipo    Tipo
+		horario *Horario
+		wantErr bool
+	}{
+		{"diario with horario", TipoDiario, ptrHorario(HorarioApertura), false},
+		{"diario without horario", TipoDiario, nil, true},
+		{"semanal with horario", TipoSemanal, ptrHorario(HorarioApertura), true},
+		{"semanal without horario", TipoSemanal, nil, false},
+		{"mensual without horario", TipoMensual, nil, false},
+		{"inicial without horario", TipoInicial, nil, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &CreateInventarioReq{
+				TiendaID: 1,
+				Tipo:     tt.tipo,
+				Horario:  tt.horario,
+			}
+			_, err := svc.Iniciar(ctx, req, 123, "admin", nil)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Iniciar() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestConfirmar_AllItemsRegistered verifica validación de items registrados
+func TestConfirmar_AllItemsRegistered(t *testing.T) {
+	mockRepo := NewMockRepository()
+	svc := NewService(mockRepo)
+	ctx := context.Background()
+
+	inv := &Inventario{
+		TiendaID:      1,
+		Tipo:          TipoDiario,
+		Estado:        EstadoEnProgreso,
+		ResponsableID: 123,
+		Items: []DetalleInventario{
+			{ItemID: 1, ValorReal: ptrFloat64(10)},
+			{ItemID: 2, ValorReal: nil},
+		},
+	}
+	createdInv, _ := mockRepo.CreateInventario(ctx, inv)
+
+	resp, err := svc.Confirmar(ctx, createdInv.ID, 123)
+	if err == nil {
+		t.Errorf("Confirmar() error = nil, want error for missing items")
+	}
+	if resp != nil {
+		t.Errorf("Confirmar() returned response, want nil")
+	}
+}
+
 // Helper functions
 func ptrHorario(h Horario) *Horario {
 	return &h

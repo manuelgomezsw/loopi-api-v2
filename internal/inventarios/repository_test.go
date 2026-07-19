@@ -31,6 +31,12 @@ func TestCreateInventario_Success(t *testing.T) {
 		IniciadoEn:    now,
 	}
 
+	// Mock the duplicate check query
+	mock.ExpectQuery("SELECT id, estado FROM inventarios").
+		WithArgs(inv.TiendaID, inv.Fecha, inv.Tipo, inv.Horario).
+		WillReturnError(sql.ErrNoRows)
+
+	// Mock the INSERT
 	mock.ExpectExec("INSERT INTO inventarios").
 		WithArgs(
 			inv.TiendaID,
@@ -73,8 +79,10 @@ func TestCreateInventario_DuplicateConstraint(t *testing.T) {
 		IniciadoEn:    now,
 	}
 
-	mock.ExpectExec("INSERT INTO inventarios").
-		WillReturnError(sql.ErrNoRows)
+	// Mock duplicate found in check query
+	mock.ExpectQuery("SELECT id, estado FROM inventarios").
+		WithArgs(inv.TiendaID, inv.Fecha, inv.Tipo, inv.Horario).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "estado"}).AddRow(999, "en_progreso"))
 
 	_, err = repo.CreateInventario(context.Background(), inv)
 
@@ -125,16 +133,16 @@ func TestGetInventarioDetalle_WithItems(t *testing.T) {
 	)
 
 	itemRows := sqlmock.NewRows(
-		[]string{"id", "inventario_id", "item_id", "inventario_referencia_id", "valor_sugerido", "valor_esperado", "valor_real", "diferencia", "creado_en", "actualizado_en"},
+		[]string{"id", "inventario_id", "item_id", "inventario_referencia_id", "valor_sugerido", "valor_esperado", "valor_real", "diferencia", "creado_en", "actualizado_en", "nombre", "unidad_medida_id"},
 	).AddRow(
-		1, 1, 100, nil, 10.0, 10.0, nil, nil, now, now,
+		1, 1, 100, nil, 10.0, 10.0, nil, nil, now, now, "Item A", 1,
 	)
 
 	mock.ExpectQuery("SELECT .* FROM inventarios WHERE id").
 		WithArgs(1).
 		WillReturnRows(invRows)
 
-	mock.ExpectQuery("SELECT .* FROM detalle_inventario WHERE inventario_id").
+	mock.ExpectQuery("SELECT .* FROM detalle_inventario").
 		WithArgs(1).
 		WillReturnRows(itemRows)
 
@@ -390,5 +398,70 @@ func TestGetStockSnapshot_EmptyList(t *testing.T) {
 	assert.NotNil(t, result)
 	assert.Len(t, result, 0)
 	// No mock expectations needed for empty list - se retorna early
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestConfirmarInventario_AtomicTransaction verifica transacción (T048)
+func TestConfirmarInventario_AtomicTransaction(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewRepository(db)
+	now := time.Now()
+
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE inventarios SET estado").
+		WithArgs("completado", sqlmock.AnyArg(), int64(1)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	mock.ExpectQuery("SELECT .* FROM inventarios WHERE id").
+		WithArgs(int64(1)).
+		WillReturnRows(sqlmock.NewRows(
+			[]string{"id", "tienda_id", "fecha", "tipo", "horario", "estado", "responsable_id", "iniciado_en", "completado_en", "creado_en", "actualizado_en"},
+		).AddRow(
+			1, 1, now, "diario", "apertura", "completado", 10, now, &now, now, now,
+		))
+
+	result, err := repo.ConfirmarInventario(context.Background(), 1)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, EstadoCompletado, result.Estado)
+	assert.NotNil(t, result.CompletadoEn)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestListInventarios_Sorting verifica ordenamiento por fecha DESC (T058)
+func TestListInventarios_Sorting(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewRepository(db)
+	now := time.Now()
+	earlier := now.Add(-24 * time.Hour)
+
+	mock.ExpectQuery("SELECT COUNT.*FROM inventarios").
+		WithArgs().
+		WillReturnRows(sqlmock.NewRows([]string{"total"}).AddRow(2))
+
+	mock.ExpectQuery("SELECT .* FROM inventarios").
+		WithArgs().
+		WillReturnRows(sqlmock.NewRows(
+			[]string{"id", "tienda_id", "fecha", "tipo", "horario", "estado", "responsable_id", "iniciado_en", "completado_en", "creado_en", "actualizado_en"},
+		).AddRow(
+			2, 1, now, "diario", "apertura", "completado", 10, now, &now, now, now,
+		).AddRow(
+			1, 1, earlier, "diario", "apertura", "completado", 10, earlier, &earlier, earlier, earlier,
+		))
+
+	filtros := &FiltrosInventario{Pagina: 1, PorPagina: 50}
+	invs, _, err := repo.ListInventarios(context.Background(), filtros)
+
+	assert.NoError(t, err)
+	assert.Len(t, invs, 2)
+	assert.True(t, invs[0].Fecha.After(invs[1].Fecha), "should be ordered by fecha DESC")
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
