@@ -397,10 +397,10 @@ func userIDFromClaims(claims *auth.Claims) uint64 {
 
 // logRequest emite un log estructurado JSON a stdout (RF-EMP-05-A.4 + Constitución VI).
 func logRequest(userID uint64, rol, operacion, empleadoID string, statusHTTP int, duracion time.Duration) {
-	log.Println(fmt.Sprintf(
+	log.Printf(
 		`{"user_id":%d,"rol":"%s","operacion":"%s","empleado_id":"%s","status_http":%d,"duracion_ms":%d}`,
 		userID, rol, operacion, empleadoID, statusHTTP, duracion.Milliseconds(),
-	))
+	)
 }
 
 func mapServiceError(err error) (int, errorResponse) {

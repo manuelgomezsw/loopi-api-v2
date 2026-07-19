@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/manuelgomezsw/loopi-api-v2/internal/auth"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/empleados"
 )
 
@@ -91,14 +90,6 @@ func empleadoAdmin() *empleados.Empleado {
 		Rol:      "admin",
 		Activo:   true,
 	}
-}
-
-// ctxAdmin retorna un context con claims de admin.
-func ctxAdmin() context.Context {
-	c := &auth.Claims{}
-	c.Subject = "1"
-	c.Rol = "admin"
-	return auth.ContextWithClaims(context.Background(), c)
 }
 
 // noopBeginTx devuelve nil — el service usa rollbackTx/commitTx que son nil-safe.

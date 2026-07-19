@@ -16,6 +16,7 @@ import (
 	"github.com/manuelgomezsw/loopi-api-v2/internal/auth"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/categorias"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/empleados"
+	"github.com/manuelgomezsw/loopi-api-v2/internal/inventarios"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/items"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/jobs"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/observability"
@@ -56,7 +57,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("error al abrir conexión a BD: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := db.Ping(); err != nil {
 		log.Fatalf("error al conectar a BD: %v", err)
@@ -176,6 +177,12 @@ func main() {
 	itemsSvc := items.NewService(itemsRepo)
 	itemsHandler := items.NewHandlerWithMetrics(itemsSvc, itemsMetrics)
 	itemsHandler.RegisterRoutes(mux, jwtMiddleware)
+
+	// Módulo de inventarios (conteo físico).
+	inventariosRepo := inventarios.NewRepository(db)
+	inventariosSvc := inventarios.NewService(inventariosRepo)
+	inventariosHandler := inventarios.NewHandler(inventariosSvc)
+	inventariosHandler.RegisterRoutes(mux, jwtMiddleware)
 
 	// Job de limpieza — sin middleware JWT, con validación de header X-CloudScheduler.
 	mux.HandleFunc("POST /internal/jobs/limpiar_tokens_revocados",

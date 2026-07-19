@@ -111,7 +111,7 @@ func (r *mysqlRepository) ListarConItems(soloActivas *bool) (*CatalogoResponse, 
 		}
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return buildCatalogo(rows)
 }
@@ -145,7 +145,7 @@ func (r *mysqlRepository) listarSinItems(soloActivas *bool) (*CatalogoResponse, 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return buildCatalogo(rows)
 }

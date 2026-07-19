@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -596,10 +595,10 @@ func userIDFromClaims(claims *auth.Claims) (uint64, bool) {
 }
 
 func logOp(userID uint64, rol, operacion string, subcatID, catID uint64, statusHTTP int, dur time.Duration) {
-	log.Println(fmt.Sprintf(
+	log.Printf(
 		`{"user_id":%d,"rol":"%s","operacion":"%s","categoria_id":%d,"subcategoria_id":%d,"status_http":%d,"duracion_ms":%d}`,
 		userID, rol, operacion, catID, subcatID, statusHTTP, dur.Milliseconds(),
-	))
+	)
 }
 
 func (h *Handler) recordMetrics(ctx context.Context, operacion string, status int, durMs float64) {

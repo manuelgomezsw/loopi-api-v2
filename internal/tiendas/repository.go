@@ -86,9 +86,10 @@ func (r *mysqlTiendaRepository) Listar(estado string, pagina, limite int) ([]Tie
 
 	whereClause := ""
 	var args []interface{}
-	if estado == "activo" {
+	switch estado {
+	case "activo":
 		whereClause = "WHERE activo = 1"
-	} else if estado == "inactivo" {
+	case "inactivo":
 		whereClause = "WHERE activo = 0"
 	}
 
@@ -113,7 +114,7 @@ func (r *mysqlTiendaRepository) Listar(estado string, pagina, limite int) ([]Tie
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var tiendas []Tienda
 	for rows.Next() {

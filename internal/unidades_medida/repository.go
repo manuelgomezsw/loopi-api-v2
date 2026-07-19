@@ -157,7 +157,7 @@ func (r *mysqlUMRepository) Listar(params *ListarUMParams) (*ListarUMResponse, e
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var unidades []UnidadMedida
 	for rows.Next() {

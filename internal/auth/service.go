@@ -107,10 +107,10 @@ func (s *service) Authenticate(usuario, contrasena string) (*AuthResult, error) 
 // Guarda la expiración original para que el job de limpieza pueda purgar tokens
 // revocados una vez que hayan expirado de forma natural.
 func (s *service) RevocarToken(claims *Claims) error {
-	if claims.RegisteredClaims.ExpiresAt == nil {
+	if claims.ExpiresAt == nil {
 		return errors.New("revocación: el token no contiene claim exp")
 	}
-	return s.repo.InsertTokenRevocado(claims.JTI, claims.RegisteredClaims.ExpiresAt.Time)
+	return s.repo.InsertTokenRevocado(claims.JTI, claims.ExpiresAt.Time)
 }
 
 // registrarFallo aplica la regla de negocio de bloqueo:
