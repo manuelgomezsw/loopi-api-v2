@@ -159,6 +159,16 @@ func (s *ServiceImpl) Iniciar(ctx context.Context, req *CreateInventarioReq, use
 			"tipo", tipoReal)
 	}
 
+	// BUG-021-B: Revalidar horario DESPUÉS de determinar tipoReal
+	// Asegura que tipo=diario→inicial no retenga horario
+	if err := s.ValidarHorario(req.Horario, tipoReal); err != nil {
+		s.logger.WarnContext(ctx, "inventario.iniciar: horario inválido para tipoReal",
+			"tipo_real", tipoReal,
+			"horario", req.Horario,
+			"error", err.Error())
+		return nil, err
+	}
+
 	// T158: Paso 3 — Crear inventario + detalles (AHORA, después de validaciones)
 	now := time.Now()
 	inv := &Inventario{
