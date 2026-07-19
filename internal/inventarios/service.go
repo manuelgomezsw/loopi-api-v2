@@ -611,6 +611,7 @@ func (s *ServiceImpl) GetEstadoInventarioActivo(ctx context.Context, tiendaID in
 type Error struct {
 	Code    string
 	Message string
+	Details map[string]interface{}
 }
 
 func (e *Error) Error() string {
@@ -618,5 +619,9 @@ func (e *Error) Error() string {
 }
 
 func NewError(code, msg string) *Error {
-	return &Error{Code: code, Message: msg}
+	return &Error{Code: code, Message: msg, Details: make(map[string]interface{})}
+}
+
+func NewErrorWithDetails(code, msg string, details map[string]interface{}) *Error {
+	return &Error{Code: code, Message: msg, Details: details}
 }

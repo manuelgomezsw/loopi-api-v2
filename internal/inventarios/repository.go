@@ -76,6 +76,34 @@ func NewRepository(db *sql.DB) Repository {
 }
 
 func (r *RepositoryImpl) CreateInventario(ctx context.Context, inventario *Inventario) (*Inventario, error) {
+	// Verificar si ya existe un duplicado ANTES de insertar para poder retornar el estado
+	checkQuery := `
+		SELECT id, estado FROM inventarios
+		WHERE tienda_id = ? AND fecha = ? AND tipo = ? AND horario <=> ?
+		LIMIT 1
+	`
+	var existingID int64
+	var existingState string
+	err := r.db.QueryRowContext(ctx, checkQuery,
+		inventario.TiendaID,
+		inventario.Fecha,
+		inventario.Tipo,
+		inventario.Horario,
+	).Scan(&existingID, &existingState)
+
+	if err == nil {
+		// Existe un duplicado - retornar error con detalles del estado
+		details := map[string]interface{}{
+			"conflicting_inventory_id": existingID,
+			"conflicting_state":        existingState,
+		}
+		return nil, NewErrorWithDetails("conteo_duplicado", "Ya existe un conteo para esta tienda, tipo y horario en esta fecha", details)
+	} else if err != sql.ErrNoRows {
+		// Error en la query
+		return nil, fmt.Errorf("error verificando duplicados: %w", err)
+	}
+
+	// No hay duplicado, proceder con INSERT
 	query := `
 		INSERT INTO inventarios
 		(tienda_id, fecha, tipo, horario, estado, responsable_id, iniciado_en, creado_en, actualizado_en)
@@ -97,7 +125,10 @@ func (r *RepositoryImpl) CreateInventario(ctx context.Context, inventario *Inven
 
 	if err != nil {
 		if strings.Contains(err.Error(), "1062") && strings.Contains(err.Error(), "uq_inventarios") {
-			return nil, NewError("conteo_duplicado", "Ya existe un conteo en progreso para esta tienda, tipo y horario en esta fecha")
+			details := map[string]interface{}{
+				"conflicting_state": "unknown",
+			}
+			return nil, NewErrorWithDetails("conteo_duplicado", "Ya existe un conteo para esta tienda, tipo y horario en esta fecha", details)
 		}
 		return nil, fmt.Errorf("error creando inventario: %w", err)
 	}

@@ -164,7 +164,7 @@ func (h *Handler) PostInventario(w http.ResponseWriter, r *http.Request) {
 			"error_code", svcErr.Code,
 			"error_message", svcErr.Message,
 			"tienda_id", req.TiendaID)
-		h.respondError(w, mapErrorToStatus(svcErr.Code), svcErr.Code, svcErr.Message)
+		h.respondErrorWithDetails(w, mapErrorToStatus(svcErr.Code), svcErr.Code, svcErr.Message, svcErr.Details)
 		return
 	}
 
@@ -684,11 +684,16 @@ func (h *Handler) GetEstadoInventarioActivo(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *Handler) respondError(w http.ResponseWriter, status int, errCode, message string) {
+	h.respondErrorWithDetails(w, status, errCode, message, nil)
+}
+
+func (h *Handler) respondErrorWithDetails(w http.ResponseWriter, status int, errCode, message string, details interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(ErrorResp{
-		Error:   errCode,
-		Mensaje: message,
+		Error:    errCode,
+		Mensaje:  message,
+		Detalles: details,
 	})
 }
 
