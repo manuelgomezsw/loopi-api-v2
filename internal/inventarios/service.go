@@ -199,12 +199,14 @@ func (s *ServiceImpl) mapInventarioToResp(inv *Inventario) *InventarioResp {
 	items := make([]ItemDetailResp, len(inv.Items))
 	for i, detail := range inv.Items {
 		items[i] = ItemDetailResp{
-			ID:            detail.ID,
-			ItemID:        detail.ItemID,
-			ValorSugerido: detail.ValorSugerido,
-			ValorEsperado: detail.ValorEsperado,
-			ValorReal:     detail.ValorReal,
-			Diferencia:    detail.Diferencia,
+			ID:             detail.ID,
+			ItemID:         detail.ItemID,
+			Nombre:         detail.Nombre,
+			UnidadMedidaID: detail.UnidadMedidaID,
+			ValorSugerido:  detail.ValorSugerido,
+			ValorEsperado:  detail.ValorEsperado,
+			ValorReal:      detail.ValorReal,
+			Diferencia:     detail.Diferencia,
 		}
 	}
 
@@ -274,12 +276,14 @@ func (s *ServiceImpl) RegistrarValor(ctx context.Context, inventarioID, itemID i
 		"diferencia", detail.Diferencia)
 
 	return &ItemDetailResp{
-		ID:            detail.ID,
-		ItemID:        detail.ItemID,
-		ValorSugerido: detail.ValorSugerido,
-		ValorEsperado: detail.ValorEsperado,
-		ValorReal:     detail.ValorReal,
-		Diferencia:    detail.Diferencia,
+		ID:             detail.ID,
+		ItemID:         detail.ItemID,
+		Nombre:         detail.Nombre,
+		UnidadMedidaID: detail.UnidadMedidaID,
+		ValorSugerido:  detail.ValorSugerido,
+		ValorEsperado:  detail.ValorEsperado,
+		ValorReal:      detail.ValorReal,
+		Diferencia:     detail.Diferencia,
 	}, nil
 }
 
@@ -463,12 +467,14 @@ func (s *ServiceImpl) Modificar(ctx context.Context, inventarioID, itemID int64,
 	}
 
 	return &ItemDetailResp{
-		ID:            detail.ID,
-		ItemID:        detail.ItemID,
-		ValorSugerido: detail.ValorSugerido,
-		ValorEsperado: detail.ValorEsperado,
-		ValorReal:     detail.ValorReal,
-		Diferencia:    detail.Diferencia,
+		ID:             detail.ID,
+		ItemID:         detail.ItemID,
+		Nombre:         detail.Nombre,
+		UnidadMedidaID: detail.UnidadMedidaID,
+		ValorSugerido:  detail.ValorSugerido,
+		ValorEsperado:  detail.ValorEsperado,
+		ValorReal:      detail.ValorReal,
+		Diferencia:     detail.Diferencia,
 	}, nil
 }
 

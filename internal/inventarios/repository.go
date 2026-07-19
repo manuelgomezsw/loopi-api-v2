@@ -97,7 +97,14 @@ func (r *RepositoryImpl) CreateInventario(ctx context.Context, inventario *Inven
 			"conflicting_inventory_id": existingID,
 			"conflicting_state":        existingState,
 		}
-		return nil, NewErrorWithDetails("conteo_duplicado", "Ya existe un conteo para esta tienda, tipo y horario en esta fecha", details)
+		// Diferenciar mensaje según estado
+		msg := "Ya existe un conteo para esta tienda, tipo y horario en esta fecha"
+		if existingState == "en_progreso" {
+			msg = "Ya existe un conteo en progreso para esta tienda, tipo y horario. Usa la opción Reanudar si deseas continuar."
+		} else if existingState == "completado" {
+			msg = "Ya existe un conteo completado para esta tienda, tipo y horario en esta fecha. No se pueden crear conteos duplicados en el mismo día."
+		}
+		return nil, NewErrorWithDetails("conteo_duplicado", msg, details)
 	} else if err != sql.ErrNoRows {
 		// Error en la query
 		return nil, fmt.Errorf("error verificando duplicados: %w", err)
@@ -128,7 +135,8 @@ func (r *RepositoryImpl) CreateInventario(ctx context.Context, inventario *Inven
 			details := map[string]interface{}{
 				"conflicting_state": "unknown",
 			}
-			return nil, NewErrorWithDetails("conteo_duplicado", "Ya existe un conteo para esta tienda, tipo y horario en esta fecha", details)
+			msg := "Ya existe un conteo para esta tienda, tipo y horario en esta fecha. No se pueden crear duplicados."
+			return nil, NewErrorWithDetails("conteo_duplicado", msg, details)
 		}
 		return nil, fmt.Errorf("error creando inventario: %w", err)
 	}
@@ -208,11 +216,13 @@ func (r *RepositoryImpl) GetInventarioDetalle(ctx context.Context, id int64) (*I
 	}
 
 	query := `
-		SELECT id, inventario_id, item_id, inventario_referencia_id,
-		       valor_sugerido, valor_esperado, valor_real, diferencia,
-		       creado_en, actualizado_en
-		FROM detalle_inventario WHERE inventario_id = ?
-		ORDER BY id
+		SELECT di.id, di.inventario_id, di.item_id, di.inventario_referencia_id,
+		       di.valor_sugerido, di.valor_esperado, di.valor_real, di.diferencia,
+		       di.creado_en, di.actualizado_en, i.nombre, i.unidad_medida_id
+		FROM detalle_inventario di
+		JOIN items i ON di.item_id = i.id
+		WHERE di.inventario_id = ?
+		ORDER BY di.id
 	`
 
 	rows, err := r.db.QueryContext(ctx, query, id)
@@ -227,7 +237,7 @@ func (r *RepositoryImpl) GetInventarioDetalle(ctx context.Context, id int64) (*I
 		err := rows.Scan(
 			&detail.ID, &detail.InventarioID, &detail.ItemID, &detail.InventarioReferenciaID,
 			&detail.ValorSugerido, &detail.ValorEsperado, &detail.ValorReal, &detail.Diferencia,
-			&detail.CreadoEn, &detail.ActualizadoEn,
+			&detail.CreadoEn, &detail.ActualizadoEn, &detail.Nombre, &detail.UnidadMedidaID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanneando detalle: %w", err)

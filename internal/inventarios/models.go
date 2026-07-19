@@ -52,16 +52,18 @@ type Inventario struct {
 
 // DetalleInventario representa una línea del conteo
 type DetalleInventario struct {
-	ID                        int64      `db:"id" json:"id"`
-	InventarioID              int64      `db:"inventario_id" json:"inventario_id"`
-	ItemID                    int64      `db:"item_id" json:"item_id"`
-	InventarioReferenciaID    *int64     `db:"inventario_referencia_id" json:"inventario_referencia_id"`
-	ValorSugerido             float64    `db:"valor_sugerido" json:"valor_sugerido"`
-	ValorEsperado             float64    `db:"valor_esperado" json:"valor_esperado"`
-	ValorReal                 *float64   `db:"valor_real" json:"valor_real"`
-	Diferencia                *float64   `db:"diferencia" json:"diferencia"`
-	CreadoEn                  time.Time  `db:"creado_en" json:"creado_en"`
-	ActualizadoEn             time.Time  `db:"actualizado_en" json:"actualizado_en"`
+	ID                        int64       `db:"id" json:"id"`
+	InventarioID              int64       `db:"inventario_id" json:"inventario_id"`
+	ItemID                    int64       `db:"item_id" json:"item_id"`
+	Nombre                    string      `db:"nombre" json:"nombre"`
+	UnidadMedidaID            interface{} `db:"unidad_medida_id" json:"unidad_medida_id,omitempty"`
+	InventarioReferenciaID    *int64      `db:"inventario_referencia_id" json:"inventario_referencia_id"`
+	ValorSugerido             float64     `db:"valor_sugerido" json:"valor_sugerido"`
+	ValorEsperado             float64     `db:"valor_esperado" json:"valor_esperado"`
+	ValorReal                 *float64    `db:"valor_real" json:"valor_real"`
+	Diferencia                *float64    `db:"diferencia" json:"diferencia"`
+	CreadoEn                  time.Time   `db:"creado_en" json:"creado_en"`
+	ActualizadoEn             time.Time   `db:"actualizado_en" json:"actualizado_en"`
 }
 
 // Request DTOs
@@ -98,6 +100,8 @@ type InventarioResp struct {
 type ItemDetailResp struct {
 	ID                     int64    `json:"id"`
 	ItemID                 int64    `json:"item_id"`
+	Nombre                 string   `json:"nombre"`
+	UnidadMedidaID         interface{} `json:"unidad_medida_id,omitempty"`
 	ValorSugerido          float64  `json:"valor_sugerido"`
 	ValorEsperado          float64  `json:"valor_esperado"`
 	ValorReal              *float64 `json:"valor_real"`
