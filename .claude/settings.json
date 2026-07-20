@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "⚠️ ADVERTENCIA: Detecté un intento de usar 'git push --no-verify'\n\nEsto SALTARÁ todas las validaciones de pre-push que configuramos:\n- Validación de Gitflow (nombre de branch, rama base correcta)\n- go vet\n- Tests unitarios\n- Build\n\n¿Está ABSOLUTAMENTE SEGURO de que desea continuar?",
+            "if": "Bash(git push*--no-verify*)"
+          }
+        ]
+      }
+    ]
+  }
+}
