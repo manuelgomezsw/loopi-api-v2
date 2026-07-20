@@ -1,0 +1,90 @@
+#!/bin/bash
+set -e
+
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+echo "🔍 Validando Gitflow..."
+echo ""
+
+# Validar que NO se haga push a main o develop
+if [[ "$CURRENT_BRANCH" == "main" || "$CURRENT_BRANCH" == "develop" || "$CURRENT_BRANCH" == "master" ]]; then
+  echo "❌ ERROR: No puedes hacer push directamente a '$CURRENT_BRANCH'"
+  echo "   Sigue Gitflow: crea un branch feature/*, bugfix/*, hotfix/*, release/* o chore/*"
+  exit 1
+fi
+
+# Validar que el branch siga la convención de nombres
+if ! [[ "$CURRENT_BRANCH" =~ ^(feature|bugfix|hotfix|release|chore)/ ]]; then
+  echo "❌ ERROR: El nombre del branch '$CURRENT_BRANCH' no sigue Gitflow"
+  echo ""
+  echo "   Nombres válidos:"
+  echo "   - feature/descripcion-feature"
+  echo "   - bugfix/descripcion-bug"
+  echo "   - hotfix/descripcion-hotfix"
+  echo "   - release/v1.2.0"
+  echo "   - chore/descripcion-tarea"
+  exit 1
+fi
+
+# Detectar rama principal (main o master)
+MAIN_BRANCH="main"
+if ! git rev-parse --verify "origin/main" >/dev/null 2>&1; then
+  MAIN_BRANCH="master"
+fi
+
+# Validar que el branch esté basado en la rama correcta
+BRANCH_TYPE=$(echo "$CURRENT_BRANCH" | cut -d'/' -f1)
+
+if [[ "$BRANCH_TYPE" == "hotfix" ]]; then
+  # hotfix/* debe estar basado en main/master
+  if ! git merge-base --is-ancestor "origin/$MAIN_BRANCH" HEAD 2>/dev/null; then
+    echo "❌ ERROR: '$CURRENT_BRANCH' no está basado en '$MAIN_BRANCH'"
+    echo "   hotfix/* deben partir de: $MAIN_BRANCH"
+    echo ""
+    echo "   Solución:"
+    echo "   git rebase origin/$MAIN_BRANCH"
+    exit 1
+  fi
+else
+  # feature/*, bugfix/*, chore/*, release/* deben estar basados en develop
+  if ! git merge-base --is-ancestor "origin/develop" HEAD 2>/dev/null; then
+    echo "❌ ERROR: '$CURRENT_BRANCH' no está basado en 'develop'"
+    echo "   $BRANCH_TYPE/* deben partir de: develop"
+    echo ""
+    echo "   Solución:"
+    echo "   git rebase origin/develop"
+    exit 1
+  fi
+fi
+
+echo "✅ Gitflow válido: $CURRENT_BRANCH (basado en rama correcta)"
+echo ""
+echo "🔍 Ejecutando validaciones de código (Backend)..."
+echo ""
+
+# Verificar si el proyecto está inicializado
+if [ ! -f "go.mod" ]; then
+  echo "⚠️  Proyecto Go no inicializado aún, saltando validaciones"
+  exit 0
+fi
+
+echo "🔍 Analizando código con go vet..."
+go vet ./... || {
+  echo "❌ go vet falló"
+  exit 1
+}
+
+echo "🧪 Ejecutando pruebas..."
+go test -race -coverprofile=coverage.out ./... || {
+  echo "❌ Pruebas fallaron"
+  exit 1
+}
+
+echo "🔨 Compilando proyecto..."
+go build ./... || {
+  echo "❌ Build falló"
+  exit 1
+}
+
+echo "✅ Todas las validaciones pasaron"
+exit 0
