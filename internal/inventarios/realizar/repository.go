@@ -48,7 +48,7 @@ func (r *RepositoryImpl) GetDetalleItem(ctx context.Context, inventarioID, itemI
 	query := `
 		SELECT d.id, d.inventario_id, d.item_id, d.valor_esperado, d.valor_real,
 		       d.diferencia, d.creado_en, d.actualizado_en,
-		       i.codigo, i.descripcion, um.nombre
+		       i.codigo, i.nombre, um.nombre
 		FROM detalle_inventario d
 		JOIN items i ON d.item_id = i.id
 		LEFT JOIN unidades_medida um ON i.unidad_medida_id = um.id
@@ -56,12 +56,12 @@ func (r *RepositoryImpl) GetDetalleItem(ctx context.Context, inventarioID, itemI
 	`
 
 	detalle := &core.DetalleInventario{}
-	var codigo, descripcion, unidad sql.NullString
+	var codigo, nombre, unidad sql.NullString
 
 	err := r.db.QueryRowContext(ctx, query, inventarioID, itemID).Scan(
 		&detalle.ID, &detalle.InventarioID, &detalle.ItemID, &detalle.ValorEsperado, &detalle.ValorReal,
 		&detalle.Diferencia, &detalle.CreadoEn, &detalle.ActualizadoEn,
-		&codigo, &descripcion, &unidad,
+		&codigo, &nombre, &unidad,
 	)
 
 	if err == sql.ErrNoRows {
@@ -73,7 +73,7 @@ func (r *RepositoryImpl) GetDetalleItem(ctx context.Context, inventarioID, itemI
 
 	// Asignar valores desde el LEFT JOIN
 	if codigo.Valid {
-		detalle.Nombre = codigo.String + " - " + descripcion.String
+		detalle.Nombre = codigo.String + " - " + nombre.String
 	}
 
 	return detalle, nil
@@ -107,7 +107,7 @@ func (r *RepositoryImpl) UpdateDetalle(ctx context.Context, inventarioID, itemID
 // GetItems obtiene todos los items de un inventario con sus valores
 func (r *RepositoryImpl) GetItems(ctx context.Context, inventarioID int64) ([]ItemDetalle, error) {
 	query := `
-		SELECT d.item_id, i.codigo, i.descripcion, d.valor_esperado, d.valor_real,
+		SELECT d.item_id, i.codigo, i.nombre, d.valor_esperado, d.valor_real,
 		       i.unidad_medida_id, um.nombre
 		FROM detalle_inventario d
 		JOIN items i ON d.item_id = i.id
@@ -125,10 +125,10 @@ func (r *RepositoryImpl) GetItems(ctx context.Context, inventarioID int64) ([]It
 	var items []ItemDetalle
 	for rows.Next() {
 		item := ItemDetalle{}
-		var codigo, descripcion, unidad sql.NullString
+		var codigo, nombre, unidad sql.NullString
 		var unidadMedidaID sql.NullInt64
 
-		if err := rows.Scan(&item.ItemID, &codigo, &descripcion, &item.ValorEsperado,
+		if err := rows.Scan(&item.ItemID, &codigo, &nombre, &item.ValorEsperado,
 			&item.ValorReal, &unidadMedidaID, &unidad); err != nil {
 			return nil, fmt.Errorf("error escaneando fila: %w", err)
 		}
@@ -136,7 +136,7 @@ func (r *RepositoryImpl) GetItems(ctx context.Context, inventarioID int64) ([]It
 		// Asignar valores desde el LEFT JOIN
 		if codigo.Valid {
 			item.ItemCodigo = codigo.String
-			item.ItemDescripcion = descripcion.String
+			item.ItemDescripcion = nombre.String
 		}
 		if unidadMedidaID.Valid {
 			item.UnidadMedidaID = unidadMedidaID.Int64
