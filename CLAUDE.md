@@ -1,4 +1,4 @@
-<!-- synced: constitution v2.0.0 | backend-standards v1.0.0 | environments-ci v1.0.0 -->
+<!-- synced: constitution v2.0.0 | backend-standards v1.1.0 | environments-ci v1.0.0 -->
 
 # Loopi v2 — Backend (Go)
 
@@ -46,6 +46,24 @@ Cada módulo (`internal/<dominio>/`) tiene tres capas con responsabilidad exclus
 - **Test corolario**: si un test de `service_test.go` necesita BD real o mock de `*sql.DB`, hay SQL
   que no pertenece al service.
 - Paginación: SIEMPRE server-side. Prohibida la paginación en memoria para colecciones no acotadas.
+
+## Sub-dominios dentro de un dominio grande [BE-ARCH-02]
+
+Complementa BE-ARCH-01. Un dominio puede dividirse en sub-paquetes cuando:
+1. **Cada sub-dominio corresponde a una spec independiente** en `specs/` con su propio ciclo de vida.
+2. **Existe justificación documentada** en el plan (ej. 009 → 018–023).
+
+**Estructura**: cada sub-dominio (`internal/<dominio>/<subdominio>/`) es autónomo y mantiene sus
+tres capas (handler, service, repository). BE-ARCH-01 se cumple dentro de cada sub-paquete.
+
+**`core/` sin handler**: datos compartidos por 2+ subdominios viven en `core/` (sin handler, solo
+models.go + repository.go). Se inyecta por interfaz. Métodos de core NO se promocionan
+anticipadamente — solo cuando existe una **segunda consumidora real** (otro subdominio o dominio
+externo).
+
+**Ejemplo**: `internal/inventarios/` → `iniciar/`, `realizar/`, `completar/`, `historial/`,
+`editar/`, `eliminar/` (cada uno con sus handler/service/repository), + `core/` con métodos
+compartidos (`CanRecordMovimiento`, `RecordMovimiento`, `GetInventarioDetalle`, etc.).
 
 ## Caché — patrón decorador Ristretto [BE-CACHE-01]
 
