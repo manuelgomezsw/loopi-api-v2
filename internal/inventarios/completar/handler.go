@@ -115,7 +115,12 @@ func (h *Handler) PostConfirmar(w http.ResponseWriter, r *http.Request) {
 		h.logger.WarnContext(ctx, "inventario.completar.post: error del service", "error", err.Error())
 		// Mapear error a código HTTP apropiado
 		statusCode := http.StatusInternalServerError
+		errorCode := "internal_error"
+		errorMsg := err.Error()
+
 		if custErr, ok := err.(*Error); ok {
+			errorCode = custErr.Code
+			errorMsg = custErr.Message
 			switch custErr.Code {
 			case "CONTEO_INCOMPLETO":
 				statusCode = http.StatusUnprocessableEntity // 422
@@ -127,7 +132,7 @@ func (h *Handler) PostConfirmar(w http.ResponseWriter, r *http.Request) {
 				statusCode = http.StatusConflict // 409
 			}
 		}
-		h.respondError(w, statusCode, custErr.Code, custErr.Message)
+		h.respondError(w, statusCode, errorCode, errorMsg)
 		return
 	}
 

@@ -89,7 +89,7 @@ func (s *ServiceImpl) ConfirmarConteo(r *http.Request, inventarioID, userID int6
 	}
 
 	// 4. Validar completitud: todos los items con valor_real
-	validarCtx, validarSpan := s.tracer.Start(ctx, SpanValidarCompletitud)
+	_, validarSpan := s.tracer.Start(ctx, SpanValidarCompletitud)
 	itemsIncompletos := 0
 	for _, item := range inventario.Items {
 		if item.ValorReal == nil {
