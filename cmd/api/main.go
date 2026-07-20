@@ -17,6 +17,7 @@ import (
 	"github.com/manuelgomezsw/loopi-api-v2/internal/categorias"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/empleados"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/inventarios"
+	"github.com/manuelgomezsw/loopi-api-v2/internal/inventarios/realizar"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/items"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/jobs"
 	"github.com/manuelgomezsw/loopi-api-v2/internal/observability"
@@ -183,6 +184,12 @@ func main() {
 	inventariosSvc := inventarios.NewService(inventariosRepo)
 	inventariosHandler := inventarios.NewHandler(inventariosSvc)
 	inventariosHandler.RegisterRoutes(mux, jwtMiddleware)
+
+	// Sub-módulo de realizar conteo (feature 019).
+	realizarRepo := realizar.NewRepository(db)
+	realizarSvc := realizar.NewService(realizarRepo)
+	realizarHandler := realizar.NewHandler(realizarSvc)
+	inventarios.RegisterRealizarRoutes(mux, realizarHandler, jwtMiddleware)
 
 	// Job de limpieza — sin middleware JWT, con validación de header X-CloudScheduler.
 	mux.HandleFunc("POST /internal/jobs/limpiar_tokens_revocados",

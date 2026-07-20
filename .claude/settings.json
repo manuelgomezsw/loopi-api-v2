@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command' | grep -q 'git push.*--no-verify' && echo '{\"systemMessage\": \"⚠️ Detectado: git push --no-verify - saltarás validaciones de Gitflow, go vet, tests y build.\"}' || echo '{\"continue\": true}'",
+            "if": "Bash(git push*--no-verify*)"
+          }
+        ]
+      }
+    ]
+  }
+}

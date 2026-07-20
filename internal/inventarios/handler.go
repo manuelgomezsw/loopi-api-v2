@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/manuelgomezsw/loopi-api-v2/internal/auth"
+	"github.com/manuelgomezsw/loopi-api-v2/internal/inventarios/realizar"
 	"go.opentelemetry.io/otel"
 )
 
@@ -732,4 +733,16 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux, middleware func(http.Handle
 
 	// GET /api/v1/inventarios — requiere autenticación (historial con filtros y paginación)
 	mux.Handle("GET /api/v1/inventarios", middleware(http.HandlerFunc(h.GetHistorial)))
+}
+
+// RegisterRealizarRoutes registra las rutas del sub-módulo de realizar conteo (feature 019).
+// Se llama desde main.go después de inicializar el repositorio y servicio de realizar.
+func RegisterRealizarRoutes(mux *http.ServeMux, handler *realizar.Handler, middleware func(http.Handler) http.Handler) {
+	// POST /api/v1/inventarios/{inventario_id}/items/{item_id}/valor — registrar valor (autosave)
+	mux.Handle("POST /api/v1/inventarios/{inventario_id}/items/{item_id}/valor",
+		middleware(http.HandlerFunc(handler.PostRegistrarValor)))
+
+	// GET /api/v1/inventarios/{inventario_id}/detalles — precarga items para sesión
+	mux.Handle("GET /api/v1/inventarios/{inventario_id}/detalles",
+		middleware(http.HandlerFunc(handler.GetPrecarga)))
 }
