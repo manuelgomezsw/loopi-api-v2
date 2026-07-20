@@ -8,12 +8,16 @@ import (
 	"time"
 
 	"github.com/manuelgomezsw/loopi-api-v2/internal/inventarios/core"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // ServiceImpl implementa la interfaz Service para iniciar conteos
 type ServiceImpl struct {
-	repo   Repository
-	logger *slog.Logger
+	repo    Repository
+	logger  *slog.Logger
+	tracer  trace.Tracer
+	metrics *Metrics
 }
 
 // Repository interfaz para acceso a datos específico de iniciar
@@ -28,9 +32,15 @@ type Repository interface {
 
 // NewService crea una nueva instancia del servicio de iniciar
 func NewService(repo Repository) Service {
+	metrics, _ := NewMetrics()
+	if metrics == nil {
+		metrics = noopMetrics()
+	}
 	return &ServiceImpl{
-		repo:   repo,
-		logger: slog.Default(),
+		repo:    repo,
+		logger:  slog.Default(),
+		tracer:  otel.Tracer(otelScope),
+		metrics: metrics,
 	}
 }
 
@@ -97,8 +107,13 @@ func (s *ServiceImpl) Iniciar(r *http.Request, req *CreateInventarioReq, userID 
 		return nil, err
 	}
 
-	// Obtener items activos para el tipo
-	itemIDs, err := s.repo.GetItemsActivosPorTipo(ctx, req.TiendaID, req.Tipo)
+	// Obtener items activos para el tipo (con span de observabilidad)
+	ctxCargar, spanCargar := s.tracer.Start(ctx, "inventario.iniciar.cargar_items")
+	startCargar := time.Now()
+	itemIDs, err := s.repo.GetItemsActivosPorTipo(ctxCargar, req.TiendaID, req.Tipo)
+	duracionCargar := time.Since(startCargar).Milliseconds()
+	s.metrics.RecordCargarItems(ctxCargar, float64(duracionCargar))
+	spanCargar.End()
 	if err != nil {
 		s.logger.ErrorContext(ctx, "inventario.iniciar: error obteniendo items",
 			"tienda_id", req.TiendaID,
@@ -125,8 +140,10 @@ func (s *ServiceImpl) Iniciar(r *http.Request, req *CreateInventarioReq, userID 
 		return nil, NewError("error_servidor", "No se pudo preparar los datos de stock.")
 	}
 
-	// Determinación automática de tipo según historial
-	existeHistorial, err := s.repo.ExisteInventarioCompletado(ctx, req.TiendaID)
+	// Determinación automática de tipo según historial (con span de observabilidad)
+	ctxDeterminar, spanDeterminar := s.tracer.Start(ctx, "inventario.iniciar.determinar_tipo")
+	startDeterminar := time.Now()
+	existeHistorial, err := s.repo.ExisteInventarioCompletado(ctxDeterminar, req.TiendaID)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "inventario.iniciar: error consultando historial",
 			"tienda_id", req.TiendaID,
@@ -142,6 +159,9 @@ func (s *ServiceImpl) Iniciar(r *http.Request, req *CreateInventarioReq, userID 
 			"tienda_id", req.TiendaID,
 			"tipo_solicitado", req.Tipo)
 	}
+	duracionDeterminar := time.Since(startDeterminar).Milliseconds()
+	s.metrics.RecordDeterminarTipo(ctxDeterminar, float64(duracionDeterminar))
+	spanDeterminar.End()
 
 	// Si tipo es inicial, anular horario
 	if tipoReal == core.TipoInicial {
