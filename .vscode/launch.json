@@ -1,0 +1,24 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug API",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/cmd/api",
+      "envFile": "${workspaceFolder}/.env",
+      "preLaunchTask": "Matar proceso en :8080"
+    },
+    {
+      "name": "Run API",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/cmd/api",
+      "noDebug": true,
+      "envFile": "${workspaceFolder}/.env",
+      "preLaunchTask": "Matar proceso en :8080"
+    }
+  ]
+}

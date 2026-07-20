@@ -8,6 +8,10 @@
 *.so
 *.dylib
 
+# Compiled binary output (sin extensión en Linux)
+/api
+/loopi-api-v2
+
 # Test binary, built with `go test -c`
 *.test
 
@@ -24,9 +28,11 @@ profile.cov
 go.work
 go.work.sum
 
-# env file
+# env file y scripts locales no versionados
 .env
+local.sh
 
 # Editor/IDE
 # .idea/
 # .vscode/
+commands.sh

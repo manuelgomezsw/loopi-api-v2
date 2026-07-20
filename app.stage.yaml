@@ -1,0 +1,18 @@
+runtime: go124
+service: default
+
+# Conexión a Cloud SQL — stage
+beta_settings:
+  cloud_sql_instances: loopi-dev-497600:us-central1:loopi-db-stage
+
+env_variables:
+  ENV: stage
+  GCP_PROJECT: loopi-dev-497600
+  APP_VERSION: "1.0.0"
+  OTEL_SERVICE_NAME: "loopi-api"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "https://dd-agent-abjhw2aifa-uc.a.run.app"
+
+automatic_scaling:
+  min_instances: 1
+  max_instances: 5
+  target_cpu_utilization: 0.65

@@ -1,0 +1,87 @@
+name: Gitflow — Back-merge master → develop
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Motivo del back-merge manual"
+        required: false
+        default: "Back-merge manual solicitado"
+
+jobs:
+  backmerge:
+    name: Abrir PR master → develop
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configurar git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Verificar si ya existe un PR de back-merge abierto
+        id: check_pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          COUNT=$(gh pr list --base develop --state open \
+            --json headRefName \
+            --jq '[.[] | select(.headRefName | startswith("backmerge/master-to-develop"))] | length')
+          echo "open_count=$COUNT" >> $GITHUB_OUTPUT
+
+      - name: Crear rama de back-merge
+        if: steps.check_pr.outputs.open_count == '0'
+        id: branch
+        run: |
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          BRANCH="backmerge/master-to-develop-${SHORT_SHA}"
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          git checkout -b "$BRANCH" origin/master
+          git push origin "$BRANCH"
+
+      - name: Abrir PR hacia develop
+        if: steps.check_pr.outputs.open_count == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ steps.branch.outputs.branch }}"
+          SHORT_SHA="${{ steps.branch.outputs.short_sha }}"
+
+          gh pr create \
+            --base develop \
+            --head "$BRANCH" \
+            --title "chore: back-merge master → develop (${SHORT_SHA})" \
+            --body "## Gitflow — Back-merge automático
+
+          Este PR fue generado automáticamente al detectar un push en \`master\`.
+
+          **Propósito:** Mantener \`develop\` sincronizado con los cambios integrados en \`master\` (hotfix o release).
+
+          **Antes de mergear:**
+          - Si existen conflictos, resuélvelos manualmente en esta rama.
+          - Usa estrategia **merge commit** (no squash, no rebase) para preservar la historia de Gitflow.
+
+          | Campo | Valor |
+          |-------|-------|
+          | Commit origen | \`${SHORT_SHA}\` |
+          | Rama origen | \`master\` |
+          | Rama destino | \`develop\` |
+          | Trigger | \`${{ github.event_name }}\` |
+
+          > 🤖 Generado por *Gitflow Back-merge Workflow*"
+
+      - name: Informar si ya existe un PR abierto
+        if: steps.check_pr.outputs.open_count != '0'
+        run: |
+          echo "::notice::Ya existe un PR de back-merge master → develop abierto. No se crea uno nuevo."
